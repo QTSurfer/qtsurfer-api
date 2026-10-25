@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: QTSurfer API
   summary: QTSurfer backend services API
-  version: 0.128.47
+  version: 0.128.48
   contact:
     name: QTSurfer Support
     email: support@qtsurfer.com
@@ -869,8 +869,20 @@ paths:
                       constructing it. See `DeclaredProperty` — best-effort, not exhaustive.
                     items:
                       $ref: '#/components/schemas/DeclaredProperty'
+                  requires:
+                    type: array
+                    description: |
+                      What the strategy needs from your plan, read from the compiled strategy and not from how
+                      it is written. `["indicators.pro"]` when it uses the pro indicators, `[]` when it needs
+                      nothing more. Registering is accepted on every plan; a plan without what it lists cannot
+                      run the strategy (`402`, see `PlanRequiredError`). Only this response carries it:
+                      `GET /strategy/{strategyId}` does not.
+                    items:
+                      type: string
+                      enum: [indicators.pro]
               example:
                 strategyId: 6bsh31ikwkuivhtgcoa6s4
+                requires: []
                 declaredProperties:
                   - name: rsi.period
                     description: RSI period
@@ -961,6 +973,20 @@ paths:
               example:
                 strategyId: 6bsh31ikwkuivhtgcoa6s4
                 validation: pending
+        '402':
+          description: |
+            The strategy uses the pro indicators and your plan does not include them: the message names the first
+            one it asks for, the line of your file and your plan. Registering it was accepted; running it is not.
+            Retrying will not help until the plan changes, so there is no `Retry-After`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanRequiredError'
+              example:
+                code: 402
+                message: 'strategy uses pro indicators (pro.adx, QTScript line 7); your plan: free'
+                retryable: false
+                upgradeUrl: https://example.com/upgrade
         '403':
           $ref: '#/components/responses/InsufficientScope'
         '404':
@@ -1350,6 +1376,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResponseError'
+        '402':
+          description: |
+            The strategy uses the pro indicators and your plan does not include them: the message names the first
+            one it asks for, the line of your file and your plan. Registering it was accepted; running it is not.
+            Retrying will not help until the plan changes, so there is no `Retry-After`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanRequiredError'
+              example:
+                code: 402
+                message: 'strategy uses pro indicators (pro.adx, QTScript line 7); your plan: free'
+                retryable: false
+                upgradeUrl: https://example.com/upgrade
         '429':
           description: Sweep queue or user concurrency limit reached.
           content:
@@ -1841,6 +1881,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResponseError'
+        '402':
+          description: |
+            The strategy uses the pro indicators and your plan does not include them: the message names the first
+            one it asks for, the line of your file and your plan. Registering it was accepted; running it is not.
+            Retrying will not help until the plan changes, so there is no `Retry-After`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanRequiredError'
+              example:
+                code: 402
+                message: 'strategy uses pro indicators (pro.adx, QTScript line 7); your plan: free'
+                retryable: false
+                upgradeUrl: https://example.com/upgrade
         '429':
           description: Rate limited (global queue at capacity or per-user limit reached)
           content:
@@ -2820,12 +2874,31 @@ paths:
               example:
                 code: 409
                 message: A live run is already active for strategy 6bsh31ikwkuivhtgcoa6s4 -- stop it before starting another
+        '402':
+          description: |
+            Your plan does not include what the request asks for. The message says which, in one of these
+            forms: the plan has **no live runs** (`Live runs are not included in tier free. Upgrade your plan to
+            run strategies live.`); it does not let you ask for a `stream` (`A flat signal stream is not included in
+            tier basic. Upgrade your plan to broadcast a run's signals.`); it does not admit a **wildcard**
+            instrument list, `*` or a pair with a `*` on one side (`Tier pro does not include wildcard ('*')
+            instruments in a live run. List the instruments you need (up to 30).`); or the strategy uses the pro
+            indicators and the plan does not include them (`strategy uses pro indicators (pro.adx, QTScript
+            line 7); your plan: free`). Retrying will not help until the plan changes, so there is no `Retry-After`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanRequiredError'
+              example:
+                code: 402
+                message: 'Live runs are not included in tier free. Upgrade your plan to run strategies live.'
+                retryable: false
+                upgradeUrl: https://example.com/upgrade
         '429':
           description: |
-            One of two kinds. **Your plan** does not include live runs, would exceed your concurrent-run or
-            instrument-count limit, does not let you ask for a `stream`, or asks for a `sandboxMinutes` shorter than the trial its plan gives: the message names your plan, and
-            retrying will not help until something changes, so there is no `Retry-After`. Or **the platform is at
-            capacity** right now: a `Retry-After` header says when to try again.
+            One of two kinds. **A limit of your plan** is reached: more runs than your concurrent-run limit, more
+            instruments in a list than your plan allows, or a `sandboxMinutes` shorter than the trial your plan gives.
+            The message names your plan, and retrying will not help until something changes, so there is no
+            `Retry-After`. Or **the platform is at capacity** right now: a `Retry-After` header says when to try again.
           headers:
             Retry-After:
               schema:
@@ -3343,12 +3416,17 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResponseError'
-        '429':
+        '402':
           description: Your plan does not let you broadcast a run's signals. The message names your plan; retrying will not help until it changes, so there is no `Retry-After`.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ResponseError'
+                $ref: '#/components/schemas/PlanRequiredError'
+              example:
+                code: 402
+                message: "A flat signal stream is not included in tier free. Upgrade your plan to broadcast a run's signals."
+                retryable: false
+                upgradeUrl: https://example.com/upgrade
       security:
         - bearerAuth: []
       tags:
@@ -3952,12 +4030,27 @@ components:
             Whether sending the same request again can succeed. `true` for `408`, `425`, `429` and
             every `5xx`; `false` for every other `4xx`, which fails the same way until the request
             changes: a field of the wrong type, a strategy that does not compile, a missing
-            parameter. A plan limit, a `429` without `Retry-After`, is `false`. When the answer
+            parameter. A plan limit (a `402`, or a `429` without `Retry-After`) is `false`. When the answer
             carries a `Retry-After`, wait that long before sending the request again.
           type: boolean
           example: false
         next:
           $ref: '#/components/schemas/ErrorNextCall'
+    PlanRequiredError:
+      description: |
+        The error of a `402`: your plan does not include what the request asks for. It is a
+        `ResponseError` (`retryable` is `false`) plus `upgradeUrl`.
+      allOf:
+        - $ref: '#/components/schemas/ResponseError'
+        - type: object
+          properties:
+            upgradeUrl:
+              description: |
+                The page where the plan can be changed. Present only when the platform has one for this
+                environment; absent otherwise. A `402` is the only error that carries it.
+              type: string
+              format: uri
+              example: https://example.com/upgrade
     ErrorNextCall:
       description: |
         The call that gets past an error, ready to send: a client that wants the same thing by

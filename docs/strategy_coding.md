@@ -409,6 +409,74 @@ A QTScript strategy implements it too, through its own `onCommand { }` section (
 
 See [Commands](live.md#commands) for the request/response shape and error codes.
 
+## The pro indicators
+
+The [pro indicators](qtscript.md#the-pro-indicators-uses) come with the Pro and Elite plans. In Java they are the methods of
+`Pro`, in `com.wualabs.qtsurfer.engine.indicators.pro`: `Pro.on(indicators)` takes the indicator group that `setupIndicators`
+receives, and each call registers one pro indicator with the same names, forms and ids as the
+[QTScript table](qtscript.md#the-pro-indicators-uses) lists. `Pro.on(indicators).adx(14)` registers `adx14` and, beside it,
+`adx14PlusDI` and `adx14MinusDI`. A window goes on the main one (`adx14`), and the listener reads the others by name.
+
+They read whole bars, so use them in a kline strategy. This one buys when the ADX says there is a trend and the plus line is
+above the minus line, and sells when it is below:
+
+```java
+import com.wualabs.qtsurfer.engine.core.KlineInterval;
+import com.wualabs.qtsurfer.engine.core.state.StateStore;
+import com.wualabs.qtsurfer.engine.indicators.core.KlineValueSource;
+import com.wualabs.qtsurfer.engine.indicators.helpers.WindowTimeRTIndicator.WindowTime;
+import com.wualabs.qtsurfer.engine.indicators.helpers.group.InstrumentGroupRTIndicator;
+import com.wualabs.qtsurfer.engine.indicators.pro.Pro;
+import com.wualabs.qtsurfer.engine.strategy.AbstractKlineStrategy;
+import com.wualabs.qtsurfer.engine.strategy.AbstractWindowListener;
+
+public class AdxTrend extends AbstractKlineStrategy {
+
+  @Override
+  public KlineInterval getInterval() {
+    return KlineInterval.s1;
+  }
+
+  @Override
+  protected void setupIndicators(InstrumentGroupRTIndicator indicators) {
+    indicators.addPrice();
+    indicators.add("open", KlineValueSource.Open);
+    indicators.add("high", KlineValueSource.High);
+    indicators.add("low", KlineValueSource.Low);
+    indicators.add("close", KlineValueSource.Close);
+    indicators.add("volume", KlineValueSource.Volume);
+    Pro.on(indicators).adx(14);
+    indicators.window("adx14", WindowTime.m1, new TrendListener(this, indicators));
+  }
+
+  private class TrendListener extends AbstractWindowListener {
+
+    TrendListener(AbstractKlineStrategy strategy, InstrumentGroupRTIndicator indicators) {
+      super(strategy, indicators);
+    }
+
+    @Override
+    public void onChange(StateStore store, double prev, double actual) {
+      double close = indicators.getValue("close");
+      double plus = indicators.getValue("adx14PlusDI");
+      double minus = indicators.getValue("adx14MinusDI");
+      if (actual > 20 && plus > minus) emitBuy(close);
+      if (actual > 20 && plus < minus) emitSell(close);
+    }
+  }
+}
+```
+
+On a `ticker` strategy a pro indicator is not refused, but its values are not the bar's and mean nothing, and validating or
+running the strategy returns an engine notice that says so.
+
+Registering a strategy that uses them is accepted on every plan, and the answer of `POST /strategy` carries
+`requires: ["indicators.pro"]`. Running it on a plan that does not include them is refused with `402`, when validating it,
+starting a backtest or a sweep with it and starting a live run with it. The message names the first call the strategy makes and
+the line of your source, here `strategy uses pro indicators (Pro.adx, line 25); your plan: free`. The check reads the compiled
+strategy, so any other mention of a class of the pro package counts the same, and the message then names the class. The status,
+the body and the `upgradeUrl` are the ones [the QTScript guide](qtscript.md#the-pro-indicators-and-your-plan) describes.
+
 ## See also
 
 - [QTScript (beta)](qtscript.md) — the same strategies written with the ceremony left out.

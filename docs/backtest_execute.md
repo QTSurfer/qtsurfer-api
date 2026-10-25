@@ -238,7 +238,8 @@ curl -X POST https://api.qtsurfer.net/v1/backtest/binance/ticker/execute \
 ```
 
 Errors: `400` invalid request, or a `type` that can't be executed yet (`funding`) · `404` prepare job
-not found or expired · `429` rate limited.
+not found or expired · `402` the strategy uses the pro indicators and your plan does not include them, see
+[the pro indicators and your plan](qtscript.md#the-pro-indicators-and-your-plan) · `429` rate limited.
 
 ## Polling the result
 

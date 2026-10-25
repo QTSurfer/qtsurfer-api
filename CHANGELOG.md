@@ -7,11 +7,32 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ## [Unreleased]
 
+## [0.128.48] — 2026-10-25
+
+### Added
+
+- A plan that does not include what a request asks for is refused with `402`, not `429`. The body is the usual error
+  (`retryable` is `false`) plus `upgradeUrl`, the page where the plan can be changed, present only when the
+  platform has one for the environment. Schema `PlanRequiredError`. It replaces the `429` of `POST /strategy/{strategyId}/live`
+  for a plan with no live runs, one that cannot ask for a `stream` and one that does not admit a wildcard instrument list,
+  and the `429` of `POST /live/{runId}/stream` for a plan that cannot broadcast. A limit that is reached (more runs or
+  instruments than the plan allows, a sandbox window shorter than the plan's) and the platform's capacity stay `429`.
+- The pro indicators of a QTScript file (`uses pro.*`) and of Java code run only on a plan that includes them (Pro and
+  Elite). A strategy that uses them is registered on every plan, and `POST /strategy` answers `requires`: `["indicators.pro"]`
+  or `[]`. Running it on a plan without them is a `402` in `POST /strategy/{strategyId}/validate`, `executeBacktest`,
+  `executeSweep` and `POST /strategy/{strategyId}/live`; the message names the first pro indicator the strategy asks for,
+  the line of the file and the plan (`strategy uses pro indicators (pro.adx, QTScript line 7); your plan: free`).
+
 ### Changed
 
 - Guides only, no change to the API. The live guide says which SDKs manage the WebSocket connection: Java and TypeScript do, Python
   does not and reads a live run's signals through a stream URL. The backtest guide says a backtest runs over one instrument, the
   prepared one: the strategy is fed that instrument's ticks only, so one that trades another instrument ends `Completed` with no trades.
+- The `retryable` description lists the `402` among the plan limits that are `false`.
+- Guides only, no change to the API. The QTScript guide lists the forms of each free indicator that a line can write and has a
+  section on the `uses` declaration that brings in the pro indicators, with their forms and the ids they register, and one on
+  the pro indicators and your plan. The strategy-coding guide has the Java side: `Pro.on(indicators)`, an example that
+  compiles, and the same refusal. The pro indicators run in backtests, sweeps, validation and live runs.
 
 ## [0.128.47] — 2026-10-23
 
