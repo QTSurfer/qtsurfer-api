@@ -68,7 +68,7 @@ Each line is a call on the indicator builder that a Java strategy configures in 
 [`InstrumentGroupRTIndicator`](https://www.qtsurfer.com/docs/developers/java-api/reference/latest/com/wualabs/qtsurfer/engine/indicators/helpers/group/InstrumentGroupRTIndicator.html),
 written without the dot. These are the names that work:
 
-`add` `bollinger` `bollingerBandwidth` `cci` `clamp` `conditional` `diff` `distance` `distanceMa` `ema` `equal`
+`add` `bollinger` `bollingerBandwidth` `cci` `clamp` `diff` `distance` `distanceMa` `ema` `equal`
 `gain` `greatOrEqual` `greatThan` `lessOrEqual` `lessThan` `loss` `macd` `max` `min` `mul` `notEqual`
 `percentChange` `rateChange` `round` `rsi` `sma` `stochRsi` `sum`
 
@@ -108,8 +108,9 @@ the one it registers, and a `Number` is a whole number or a decimal. What each a
 
 A call whose arguments match none of them is rejected with
 the forms that do exist: `ema(1, 2, 3)` answers that its forms are `ema(int)`, `ema(String, int)` and `ema(String,
-String, int)`. The builder's methods that take a function (`predicate`, `fun`, `decorate`, `periodCount`) can only be
-written in Java.
+String, int)`. The builder's methods that take a function (`predicate`, `fun`, `decorate`, `periodCount`) and `conditional`,
+which takes a function and indicators as objects, can only be written in Java. To compare an indicator with a number, use
+`equal`, `notEqual`, `greatThan`, `greatOrEqual`, `lessThan` or `lessOrEqual`.
 
 A name that is not on the list, and that no `uses` line brings in ([next section](#the-pro-indicators-uses)), is not an
 indicator you can use here, and the strategy is rejected with `unknown indicator '<name>'`: `wma` and `zscore` are

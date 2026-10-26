@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: QTSurfer API
   summary: QTSurfer backend services API
-  version: 0.128.48
+  version: 0.128.49
   contact:
     name: QTSurfer Support
     email: support@qtsurfer.com
@@ -1152,6 +1152,11 @@ paths:
         data can be prepared and is rejected by `execute` and `executeSweep`. A `kline` prepare takes
         the bar width from `cadence` — see `PrepareRequest`.
 
+        The cadence of an exchange's data is held to your plan: the "Cadences by plan" section of the Backtests guide lists the cadences each
+        plan includes. A cadence your plan does not include is `402`, and a request that names none
+        gets the plan's default. The `202` says the `cadence` in effect. None of this applies to
+        `exchangeId: user`: your own data is prepared at its own cadence, whatever the plan.
+
         **`exchangeId: user` is reserved for your own uploaded data.** Instead of a managed
         exchange, it prepares from a dataset you created via `POST /datasets` (see the **Dataset**
         endpoints) — send `datasetId` in place of `instrument`. See `PrepareRequest` below for the
@@ -1185,11 +1190,11 @@ paths:
               $ref: '#/components/schemas/PrepareRequest'
       responses:
         '202':
-          description: Prepare task accepted (queued for processing)
+          description: Prepare task accepted (queued for processing), with the `cadence` in effect
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AcceptedJob'
+                $ref: '#/components/schemas/PrepareAccepted'
         '400':
           description: |
             Invalid request or parameters. Also returned when `from` is older than the configured
@@ -1203,6 +1208,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResponseError'
+        '402':
+          description: |
+            `cadence` is not one of the cadences your plan includes (see `PrepareRequest`); the message
+            names it, your plan and what the plan includes. Does not apply to `exchangeId: user`.
+            Retrying will not help until the plan changes, so there is no `Retry-After`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanRequiredError'
+              example:
+                code: 402
+                message: 'cadence 1m is not included in your plan (free); it includes 3m, 5m, 15m, 30m, 1h, 2h, 4h'
+                retryable: false
+                upgradeUrl: https://example.com/upgrade
         '403':
           $ref: '#/components/responses/InsufficientScope'
         '404':
@@ -2537,16 +2556,25 @@ paths:
         picks tickers or klines and is also the resulting dataset's `type`. The range is capped by
         your tier like any import (`maxImportRangeHours` of `GET /account`).
 
-        A `dex` import has two data shapes, chosen by the top-level `cadence`:
+        **An import is held to your plan's cadences,** the same ones as the preparation of an
+        exchange's data (the "Cadences by plan" section of the Backtests guide). A `cadence` your plan does not include is `402`; a
+        request that names none gets the plan's default; any other cadence your plan includes can be
+        asked for. The `202` says the `cadence` the dataset is built at. An upload is not held to
+        this: it is stored at the cadence detected in it.
 
-        * Omitted/blank (default) — on-chain swap history, replayed directly from the pool/pair's
-          own chain. Cadence is native, not resampled: each swap keeps the timestamp it happened
-          at rather than being bucketed into candles, so the resulting version's `cadence` is `rt`
-          unless the swaps happen to sit on a fixed grid (see `DatasetVersion.cadence`).
-        * One of `1s` / `1m` / `5m` — pre-aggregated candles at that width instead of raw trades.
-          The resulting dataset's `type` is `klines`, not `ticker`. Not every network supports every
-          cadence yet — an unsupported combination fails asynchronously, same as an unresolvable
-          pool (see the `failed` status on the poll endpoint below).
+        A `dex` import has two data shapes:
+
+        * Candles at the `cadence` you ask for, or at the plan's default when you ask for none. Every
+          cadence of the list is built, from the nearest width the source serves. The resulting dataset's `type` is `klines`, not `ticker`, and
+          `dex.id` / `dex.version` are not needed. Not every network supports candles yet — an
+          unsupported combination fails asynchronously, same as an unresolvable pool (see the
+          `failed` status on the poll endpoint below).
+        * On-chain swap history (per-trade data), replayed directly from the pool/pair's own chain —
+          **only on a plan that includes the native rate of a source, and when `cadence` is omitted**.
+          Cadence is native, not resampled: each swap
+          keeps the timestamp it happened at rather than being bucketed into candles, so the
+          resulting version's `cadence` is `rt` unless the swaps happen to sit on a fixed grid (see
+          `DatasetVersion.cadence`). Needs `dex.id` and `dex.version`.
       requestBody:
         description: What to fetch, and where from
         required: true
@@ -2556,7 +2584,7 @@ paths:
               $ref: '#/components/schemas/DatasetImportRequest'
             examples:
               onChain:
-                summary: On-chain swap history (native cadence)
+                summary: On-chain swap history (native cadence, elite)
                 value:
                   name: "weth-usdc-week"
                   instrument: "WETH/USDC"
@@ -2569,32 +2597,32 @@ paths:
                     version: "v3"
                     contract: "0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640"
               candles:
-                summary: Pre-aggregated 1-second candles
+                summary: Pre-aggregated 5-minute candles
                 value:
-                  name: "weth-usdc-1s"
+                  name: "weth-usdc-5m"
                   instrument: "WETH/USDC"
                   from: "2026-08-01T00:00:00Z"
                   to: "2026-08-01T06:00:00Z"
-                  cadence: "1s"
+                  cadence: "5m"
                   type: "dex"
                   dex:
                     network: "ethereum"
                     contract: "0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640"
               cexKlines:
-                summary: Klines of a centralized exchange, 1-second bars
+                summary: Klines of a centralized exchange, 5-minute bars
                 value:
-                  name: "btc-usdt-1s-sept"
+                  name: "btc-usdt-5m-sept"
                   instrument: "BTC/USDT"
                   from: "2026-09-01T00:00:00Z"
                   to: "2026-09-01T06:00:00Z"
-                  cadence: "1s"
+                  cadence: "5m"
                   type: "cex"
                   cex:
                     exchange: "binance"
                     segment: "spot"
                     dataType: "klines"
               cexTicker:
-                summary: Tickers of a centralized exchange, finest cadence the range holds
+                summary: Tickers of a centralized exchange, finest cadence your plan includes
                 value:
                   name: "btc-usdt-ticker-sept"
                   instrument: "BTC/USDT"
@@ -2607,7 +2635,7 @@ paths:
                     dataType: "ticker"
       responses:
         '202':
-          description: Dataset created, fetch started
+          description: Dataset created, fetch started, with the `cadence` it is built at when that is known
           content:
             application/json:
               schema:
@@ -2617,6 +2645,7 @@ paths:
                 importId: "imp_01j9z1x2y3z4a5b6c7d8e9f0g1"
                 jobId: "dataset-import:00000000-.../ds_3f9a1c2e7b0d4a5f:imp_01j9z1x2y3z4a5b6c7d8e9f0g1"
                 status: "fetching"
+                cadence: "3m"
         '400':
           description: |
             Invalid request; `instrument` isn't a plain spot pair; `from >= to`; `cadence` present
@@ -2640,6 +2669,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResponseError'
+        '402':
+          description: |
+            `cadence` is not one of the cadences your plan includes, or the request would give you
+            per-trade data (a `dex` import with no candle `cadence`) and your plan does not include it.
+            The message names the plan and what it includes. Retrying will not help until the plan
+            changes, so there is no `Retry-After`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanRequiredError'
+              example:
+                code: 402
+                message: 'cadence 1m is not included in your plan (free); it includes 3m, 5m, 15m, 30m, 1h, 2h, 4h'
+                retryable: false
+                upgradeUrl: https://example.com/upgrade
         '403':
           $ref: '#/components/responses/InsufficientScope'
         '409':
@@ -4684,17 +4728,23 @@ components:
             what omitting it means, depends on the source:
 
             * Managed exchange, `ticker` or `funding` — one of `1s`, `5s`, `1m`, `3m`, `5m`, `15m`,
-              `30m`, `1h`, `2h`, `4h`, `8h`, `12h`, `1d`, `1w`, `1q`; any other label returns `400`.
-              Omitted = `1s`, the publisher's native cadence.
+              `30m`, `1h`, `2h`, `4h`, `8h`, `12h`, `1d`, `1w`, `1q`; any other label returns `400`,
+              and one your plan does not include returns `402`. Omitted = the finest cadence your plan
+              includes.
             * Managed exchange, `kline` — the same labels as above, `1s` to `1q`; a label that is
-              not a whole number of seconds returns `400`. Omitted = `1s`. This is the width of the
+              not a whole number of seconds returns `400`. Omitted = the finest cadence your plan
+              includes. This is the width of the
               bars a run reads: it is chosen here, once, and the same strategy can be run at
               several cadences by preparing the range at each.
             * Dataset (`exchangeId: user`) — omitted = the dataset version's own discovered
               `cadence` (see `DatasetVersion.cadence`), served as-is. Any cadence equal to or
               coarser than it and an exact multiple of it is accepted, including ones outside the
               managed-exchange list (e.g. `15s`); an `rt` dataset can be resampled to any fixed
-              cadence.
+              cadence. Your plan does not limit it.
+
+            What a managed exchange's data is prepared at depends on your plan: the "Cadences by plan" section of the Backtests guide
+            lists the cadences each plan includes and its default. Omitted = the plan's default. A
+            cadence your plan does not include is `402`.
       example:
         instrument: BTC/USDT
         from: "2024-12-13T00:00:00Z"
@@ -5598,6 +5648,24 @@ components:
           example: 13RBLGQlPnfDjO6wyKSX8i
       example:
         jobId: "13RBLGQlPnfDjO6wyKSX8i"
+    PrepareAccepted:
+      description: |
+        The `202` of a prepare: the job and the cadence the data is prepared at.
+      allOf:
+        - $ref: '#/components/schemas/AcceptedJob'
+        - type: object
+          required:
+            - cadence
+          properties:
+            cadence:
+              type: string
+              description: |
+                The cadence in effect: the one you asked for, or the plan's default when you asked for
+                none. For `exchangeId: user`, the dataset's own cadence when you asked for none.
+              example: "3m"
+      example:
+        jobId: "13RBLGQlPnfDjO6wyKSX8i"
+        cadence: "3m"
     BacktestJobResult:
       type: object
       description: Backtest job result.
@@ -6450,25 +6518,27 @@ components:
           enum: ["1s", "5s", "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "8h", "12h", "1d", "1w", "1q"]
           description: |
             Optional; what it means, and what it accepts, depends on `type`. Any other value is
-            `400`.
+            `400`. A cadence your plan does not include is `402` (the "Cadences by plan" section of the Backtests guide lists them).
 
-            * `dex` — omitted/blank keeps native per-trade event cadence: each swap at its own
-              timestamp, so the resulting version's `cadence` is `rt` unless the swaps happen to
-              sit on a fixed grid (see `DatasetVersion.cadence`). Set to `1s`, `1m` or `5m`
-              instead to get pre-aggregated candles at that width rather than raw trades (the
-              resulting dataset's `type` becomes `klines`). Not every network supports every
-              cadence — an unsupported combination fails asynchronously, not at request time (see
-              `DatasetImportState.error`).
+            * `dex` — candles at that width (the resulting dataset's `type` is `klines`), built from
+              the nearest width the source serves. Omitted/blank = the plan's default; on a plan
+              that includes the native rate of a source, omitted keeps native per-trade event
+              cadence: each swap at its own timestamp, so the resulting version's `cadence` is `rt`
+              unless the swaps happen to sit on a fixed grid (see `DatasetVersion.cadence`).
+              Not every network supports candles — an unsupported combination fails
+              asynchronously, not at request time (see `DatasetImportState.error`).
             * `cex` — one of `1s`, `5s`, `1m`, `3m`, `5m`, `15m`, `30m`, `1h`, `2h`, `4h`, `8h`,
               `12h`, `1d`, `1w`, `1q`, whether `dataType` is `ticker` or `klines`. Omitted = the
-              finest cadence every part of the range holds.
+              plan's default; on a plan that includes the native rate of a source, the finest
+              cadence every part of the range holds.
 
             For `cex` the bars are built from the finest data every part of the range holds. A
             `cadence` finer than that, or not an exact multiple of it, fails the import
             asynchronously (`failed`; the `error` names the finest cadence the range holds) rather
             than returning a dataset with a different cadence from the one asked for. So a range
             whose history changes cadence part-way (from `1m` to `1s`, say) comes out entirely at
-            the coarser one when `cadence` is omitted: the dataset has no gap that is only a
+            the coarser one when the range decides it (a plan that includes the native rate, no
+            `cadence`): the dataset has no gap that is only a
             change of cadence.
         type:
           type: string
@@ -6585,6 +6655,14 @@ components:
           enum: [fetching]
           description: Always `fetching` in this response — the fetch has only just started.
           example: "fetching"
+        cadence:
+          type: string
+          description: |
+            The cadence the dataset is built at: the one you asked for, or the plan's default when you
+            asked for none (`rt` for the per-trade data of a `dex` import). Absent only for a `cex`
+            import that named none on a plan that includes the native rate of a source: the range
+            decides, and the dataset's `cadence` is in the poll below once it is ready.
+          example: "3m"
     DatasetImportState:
       type: object
       description: |

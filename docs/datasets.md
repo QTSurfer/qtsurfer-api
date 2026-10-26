@@ -239,38 +239,44 @@ history, builds the bars of the requested `cadence` from the finest data it has 
 result as a dataset version, exactly as for an upload. See [Importing an exchange's
 history](#importing-an-exchanges-history) below.
 
-A `dex` import has two data shapes, chosen by the top-level `cadence`:
+**An import is held to your plan's cadences,** the same ones as the preparation of an exchange's data
+([Cadences by plan](backtest_execute.md#cadences-by-plan)). A `cadence` your plan does not include is
+`402`; a request that names none gets the plan's default; any other cadence your plan includes can be
+asked for, and the `202` says the `cadence` the dataset is built at. An **upload** is not held to this: it is stored at
+the cadence detected in it, whatever that is, and is prepared at it whatever your plan.
 
-* Omitted/blank (default) — on-chain swap history, replayed directly from the pool/pair's own
-  chain, each swap at its own timestamp (native per-trade cadence).
-* `1s` \| `1m` \| `5m` — pre-aggregated candles at that width instead of raw trades. The resulting
-  dataset's `type` is `klines`, not `ticker` ([What `type` is](#what-type-is): candles carry no
-  book). Swaps replayed as bars of a width, with no book either, come out as `klines` too.
+A `dex` import has two data shapes:
+
+* Candles at the `cadence` you ask for, or at the plan's default when you ask for none. The resulting dataset's `type` is `klines`, not `ticker` ([What
+  `type` is](#what-type-is): candles carry no book), and `dex.id` / `dex.version` are not needed.
+  Swaps replayed as bars of a width, with no book either, come out as `klines` too.
+* On-chain swap history, replayed directly from the pool/pair's own chain, each swap at its own
+  timestamp (native per-trade cadence) — **only on a plan that includes the native rate of a source,
+  and when `cadence` is omitted**.
 
 | Field | Type | Notes |
 |---|---|---|
 | `name` | string | required, unique among your datasets. `409` if already taken |
 | `instrument` | string | required, plain spot pair — the dataset's own label, independent of the pool's on-chain token order |
 | `from`, `to` | string (date-time) | required, ISO-8601 UTC. `from` inclusive, `to` exclusive, `from < to`. Total span is capped by your tier |
-| `cadence` | string | optional. For `dex`: omitted/blank = native per-trade cadence (see below); one of `1s` \| `1m` \| `5m` asks for pre-aggregated candles at that width on a network that supports it (any other value is `400`) — on a network that doesn't, it's silently ignored, see below. For `cex`: see [Importing an exchange's history](#importing-an-exchanges-history) |
+| `cadence` | string | optional, the same labels as a preparation (`1s` to `1q`; any other value is `400`); one your plan does not include is `402`. For `dex`: candles at that width on a network that supports it; omitted/blank = the plan's default, or native per-trade cadence on a plan that includes the native rate (see below). For `cex`: see [Importing an exchange's history](#importing-an-exchanges-history) |
 | `type` | string | required, `"dex"` \| `"cex"` |
 | `dex.network` | string | required, one of `ethereum` \| `robinhood` |
-| `dex.id` | string | required unless a candle `cadence` actually resolves (see below) — a candle `cadence` ignored on a non-candle network still requires this. `"uniswap"` is the only value today — which on-chain DEX protocol `dex.contract` implements |
-| `dex.version` | string | required unless a candle `cadence` actually resolves (see below). `"v2"` \| `"v3"` |
+| `dex.id` | string | required only for the per-trade import (no `cadence`, on a plan that includes the native rate); ignored when candles are built. `"uniswap"` is the only value today — which on-chain DEX protocol `dex.contract` implements |
+| `dex.version` | string | required only for the per-trade import (no `cadence`, on a plan that includes the native rate); ignored when candles are built. `"v2"` \| `"v3"` |
 | `dex.contract` | string | required, the pool (v3) or pair (v2) contract address |
 | `dex.factory` | string | optional — omit to auto-discover on-chain from `contract`; supply only if you already know it or the pool/pair belongs to a non-canonical factory. Either way the pool/pair is validated against whichever factory is used before anything is fetched. Ignored if a candle `cadence` actually resolves (see below) |
 
-**On-chain cadence is native, not resampled.** A plain `dex` import (no `cadence`) keeps the
-source's own per-trade event cadence — each swap at the timestamp it happened, so the resulting
-version's `cadence` is `rt` unless the swaps happen to sit on a fixed grid — rather than bucketing
-into candles; resample to a coarser cadence afterward as a separate step if you need one from
-on-chain data. Asking for `cadence: "1s"`/`"1m"`/`"5m"` instead gets you pre-aggregated candles at
-that width directly — but only on a network that actually has a candle source behind it. On any
-other network a candle `cadence` is silently ignored and the import proceeds as if `cadence` were
-never sent (native, `dex.id`/`dex.version` required) — it does not fail, sync or async. Which
-networks support candles today isn't part of this contract and may change; if you need to know
-before importing, request the native cadence and check the resulting version's own `cadence`
-instead of assuming.
+**On-chain cadence is native, not resampled.** A plain `dex` import (no `cadence`) on a plan that
+includes the native rate of a source keeps the source's own per-trade event cadence — each swap at the timestamp it happened,
+so the resulting version's `cadence` is `rt` unless the swaps happen to sit on a fixed grid — rather
+than bucketing into candles; resample to a coarser cadence afterward as a separate step if you need
+one from on-chain data. Any other plan gets candles at its default instead, and so does an import
+that asks for a `cadence`: the bars are built at that width directly — but only on a network that actually has
+a candle source behind it. On any other network a plan that does not include per-trade data cannot
+be served and the request is `402`; on a plan that does, the `cadence` is ignored and the import
+proceeds as if it were never sent (native, `dex.id`/`dex.version` required). Which networks support candles today
+isn't part of this contract and may change.
 
 ```bash
 curl -X POST https://api.qtsurfer.net/v1/datasets/imports \
@@ -319,9 +325,10 @@ Errors: `400` invalid request, `instrument` isn't a plain spot pair, `from >= to
 present but not one of its supported values, the range exceeds your tier's import ceiling, the
 range's rough size estimate exceeds your tier's row limit, `dex.network`/`dex.id` not one of their
 supported values, `dex.contract`/`dex.factory` fail basic shape validation, or (when `cadence` is
-omitted) `dex.id`/`dex.version` missing (whether the pool/pair actually resolves, and for a candle
+omitted on a plan that includes the native rate) `dex.id`/`dex.version` missing (whether the pool/pair actually resolves, and for a candle
 `cadence` whether that combination is servable on the requested network, is checked later,
-asynchronously — see `failed` below) · `409` dataset name already taken · `429` your tier's dataset
+asynchronously — see `failed` below) · `402` `cadence` is not one of your plan's, or per-trade data your
+plan does not include · `409` dataset name already taken · `429` your tier's dataset
 count limit is reached, or your account's total storage limit ([`GET /account`](account.md)'s
 `maxTotalStorageBytes`) is already reached — delete a dataset to free a slot or space, or upgrade.
 
@@ -340,8 +347,10 @@ block that says what to import changes:
 
 `cadence` is optional, and takes the same labels as the cadence of a backtest preparation, for
 tickers and for klines alike: `1s`, `5s`, `1m`, `3m`, `5m`, `15m`, `30m`, `1h`, `2h`, `4h`, `8h`,
-`12h`, `1d`, `1w` or `1q`. Any other label is `400`. Omitted, the dataset gets the finest cadence **every part** of the range
-holds. The bars are built from the finest data every part of the range holds, so a range whose
+`12h`, `1d`, `1w` or `1q`. Any other label is `400`, and one your plan does not include is `402`.
+Omitted, the dataset gets the plan's default; a plan that includes the native rate of a source gets
+the finest cadence **every part** of the range holds instead. The bars are built from the finest data
+every part of the range holds, so, when the range decides, a range whose
 history changes cadence part-way (from `1m` to `1s`, say) comes out entirely at the coarser one: the
 dataset has no gap that is only a change of cadence. A `cadence` finer than that, or not an exact
 multiple of it, fails the import (`failed`, and `error` names the finest cadence the range holds)

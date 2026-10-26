@@ -43,17 +43,17 @@ Sources that can be executed: ticker, kline`.
 
 ### Kline: you choose the bar width
 
-A kline run reads bars of exactly the `cadence` you prepared at — `1s` (the default) up to `1q`, the
-same labels as for tickers (`5s`, `3m`, `8h`, `1w` among them) — whatever the strategy itself might
-suggest. The same strategy can therefore be run at several cadences by preparing the range once per
+A kline run reads bars of exactly the `cadence` you prepared at — from the finest your plan includes
+(the default) up to `1q`, the same labels as for tickers (`5s`, `3m`, `8h`, `1w` among them) — whatever
+the strategy itself might suggest. The same strategy can therefore be run at several cadences by preparing the range once per
 cadence. A label that is not a whole number of seconds is `400` at prepare.
 
 ```bash
 curl -X POST https://api.qtsurfer.net/v1/backtest/binance/kline/prepare \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"instrument":"BTC/USDT","from":"2026-03-14T10:00:00Z","to":"2026-03-14T16:00:00Z","cadence":"1m"}'
-# → 202 {"jobId": "5ikYAMIO..."}
+  -d '{"instrument":"BTC/USDT","from":"2026-03-14T10:00:00Z","to":"2026-03-14T16:00:00Z","cadence":"5m"}'
+# → 202 {"jobId": "5ikYAMIO...", "cadence": "5m"}
 
 curl -X POST https://api.qtsurfer.net/v1/backtest/binance/kline/execute \
   -H "Authorization: Bearer $TOKEN" \
@@ -89,10 +89,33 @@ Two shapes, chosen by the `exchangeId` path segment:
 | `instrument` | string | required **unless** `exchangeId` is the reserved value `user` |
 | `datasetId` | string | **only** for `exchangeId: user` — a dataset from `POST /datasets`, in place of `instrument` |
 | `datasetVersionId` | string | **only** for `exchangeId: user`, optional — pins a past version instead of the dataset's current one |
-| `cadence` | string | optional. Managed exchange, `ticker` or `funding`: one of `1s`, `5s`, `1m`, `3m`, `5m`, `15m`, `30m`, `1h`, `2h`, `4h`, `8h`, `12h`, `1d`, `1w`, `1q` — default `1s`. Managed exchange, `kline`: the same labels — default `1s`; any other label is `400`. `exchangeId: user`: default is the dataset version's own discovered cadence, served as-is; any cadence equal to or coarser than it and an exact multiple of it is accepted, even outside that list (e.g. `15s`), and an `rt` dataset resamples to any fixed cadence. Finer than the source, or not an exact multiple of it, is `400` |
+| `cadence` | string | optional. Managed exchange, `ticker` or `funding`: one of `1s`, `5s`, `1m`, `3m`, `5m`, `15m`, `30m`, `1h`, `2h`, `4h`, `8h`, `12h`, `1d`, `1w`, `1q` — default the finest your plan includes ([Cadences by plan](#cadences-by-plan)). Managed exchange, `kline`: the same labels — same default; any other label is `400`, and one your plan does not include is `402`. `exchangeId: user`: default is the dataset version's own discovered cadence, served as-is; any cadence equal to or coarser than it and an exact multiple of it is accepted, even outside that list (e.g. `15s`), and an `rt` dataset resamples to any fixed cadence. Finer than the source, or not an exact multiple of it, is `400` |
 
 `exchangeId: user` is reserved for your own uploaded data — see
 [`docs/datasets.md`](datasets.md).
+
+### Cadences by plan
+
+The data the platform keeps for an exchange is prepared, and imported (see
+[`docs/datasets.md`](datasets.md)), at the cadences your plan includes. **This table is the one
+place that lists them;** the rest of the contract refers to it.
+
+| Plan | Cadences | Default |
+|---|---|---|
+| free | `3m`, `5m`, `15m`, `30m`, `1h`, `2h`, `4h` | `3m` |
+| basic | those, and `8h`, `12h`, `1d` | `3m` |
+| pro | those, and `1m`, `1w` | `1m` |
+| elite | those, and `1s`, `5s`, `1q`, and the native rate of a source | `1s` |
+
+A plan includes a set, not "everything coarser than the finest": `1d` is not on a free plan. A request
+that names no `cadence` gets the plan's default, its finest cadence, and the `202` says which
+(`{"jobId": "…", "cadence": "3m"}`). Naming one your plan does not include is `402`, and the message
+names it and what the plan includes. The native rate of a source (the per-trade swaps of a pool, the
+finest cadence a range of an exchange holds) is only for the plans whose row says so: an import of it
+that names no cadence is given that, not the default ([`docs/datasets.md`](datasets.md)).
+
+Your own data is not held to this table: a dataset you uploaded is prepared (`exchangeId: user`) at its
+own cadence, or any coarser exact multiple of it, whatever the plan.
 
 ### Example
 
@@ -101,14 +124,15 @@ curl -X POST https://api.qtsurfer.net/v1/backtest/binance/ticker/prepare \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"instrument":"BTC/USDT","from":"2026-03-14","to":"2026-03-15"}'
-# → 202 {"jobId": "5ikYAMIO..."}
+# → 202 {"jobId": "5ikYAMIO...", "cadence": "3m"}   (a free plan: no cadence named, so its finest)
 ```
 
 Errors: `400` invalid request, `from` older than the lookback window, `to` in the future, a `kline`
 `cadence` that isn't a kline cadence, or (for
 `exchangeId: user`) the dataset's upload hasn't finished ingesting / `cadence` finer than the
 dataset's discovered cadence / a `kline` prepare over a dataset that isn't `klines` / range exceeds
-your tier's limit · `404` exchange/type not found, or
+your tier's limit · `402` `cadence` is not one of your plan's ([Cadences by plan](#cadences-by-plan)) —
+doesn't apply to `exchangeId: user` · `404` exchange/type not found, or
 (for `exchangeId: user`) `datasetId`/`datasetVersionId` doesn't exist or isn't yours · `429` global
 queue at capacity or too many active backtests — doesn't apply to `exchangeId: user`, which reads
 an already-ingested file rather than claiming worker capacity.

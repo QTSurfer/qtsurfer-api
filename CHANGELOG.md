@@ -7,6 +7,30 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ## [Unreleased]
 
+## [0.128.49] — 2026-10-26
+
+### Changed
+
+- The data the platform keeps for an exchange is prepared and imported at the cadences your plan includes, listed in
+  "Cadences by plan" of the Backtests guide. A plan includes a set, not everything coarser than its finest. A cadence
+  outside it is `402` (`PlanRequiredError`) in `prepareBacktest` and `importDataset`. Until now the API accepted any
+  cadence of the list on any plan; only the app held a plan to its own.
+- A prepare that names no `cadence` is prepared at the plan's default (its finest cadence, in the same table), not at
+  `1s` for every plan. The same for an import. A `dex` import that names none now builds candles (the dataset's `type`
+  is `klines`, `dex.id` and `dex.version` are ignored); a plan that includes the native rate of a source keeps the
+  per-trade import when it names none. A `dex` import can ask for any cadence of the list, not only `1s`, `1m`, `5m`.
+- Your own data is not held to the plan's cadences: an upload is stored at the cadence detected in it and is prepared
+  (`exchangeId: user`) at it, or at any coarser exact multiple, on every plan.
+- Guides only, no change to the API. The QTScript guide no longer lists `conditional` among the names that a `setup:` line can
+  write: like the builder's methods that take a function, it can only be written in Java. The guide says how to compare an
+  indicator with a number.
+
+### Added
+
+- The `202` of `prepareBacktest` says the `cadence` in effect (schema `PrepareAccepted`), and the `202` of `importDataset`
+  says the `cadence` the dataset is built at (`rt` for per-trade data; absent for a `cex` import that names none on a
+  plan that includes the native rate of a source, whose cadence the range decides).
+
 ## [0.128.48] — 2026-10-25
 
 ### Added
