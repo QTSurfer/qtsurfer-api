@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: QTSurfer API
   summary: QTSurfer backend services API
-  version: 0.128.49
+  version: 0.128.50
   contact:
     name: QTSurfer Support
     email: support@qtsurfer.com
@@ -2575,6 +2575,20 @@ paths:
           keeps the timestamp it happened at rather than being bucketed into candles, so the
           resulting version's `cadence` is `rt` unless the swaps happen to sit on a fixed grid (see
           `DatasetVersion.cadence`). Needs `dex.id` and `dex.version`.
+
+        **Solana has candles only.** There is no per-trade import for a Solana pool, so a request
+        that names no `cadence` gets the plan's default as candles on every plan, elite included
+        (`1s`), and `dex.id`, `dex.version` and `dex.factory` are never needed. The `dex.contract`
+        of a Solana pool is its base58 address, which is case-sensitive: send it exactly as it is
+        written.
+
+        **Candles reach back a limited history** (the Datasets guide gives it). A candle import —
+        one that names a `cadence`, or that gets the plan's default — whose `from` is earlier than
+        that is `400` up front, whatever the network, instead of being accepted and failing later.
+        A per-trade import and a `cex` import are not held to it.
+
+        **A width in which the pool had no trade may have no bar:** the candles of a pool are not
+        a contiguous grid, and a missing one only means nothing traded and the price did not move.
       requestBody:
         description: What to fetch, and where from
         required: true
@@ -2601,13 +2615,25 @@ paths:
                 value:
                   name: "weth-usdc-5m"
                   instrument: "WETH/USDC"
-                  from: "2026-08-01T00:00:00Z"
-                  to: "2026-08-01T06:00:00Z"
+                  from: "2026-10-27T00:00:00Z"
+                  to: "2026-10-27T06:00:00Z"
                   cadence: "5m"
                   type: "dex"
                   dex:
                     network: "ethereum"
                     contract: "0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640"
+              solanaCandles:
+                summary: Candles of a Solana pool (the address as written, base58)
+                value:
+                  name: "sol-usdc-5m"
+                  instrument: "SOL/USDC"
+                  from: "2026-10-27T00:00:00Z"
+                  to: "2026-10-27T06:00:00Z"
+                  cadence: "5m"
+                  type: "dex"
+                  dex:
+                    network: "solana"
+                    contract: "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE"
               cexKlines:
                 summary: Klines of a centralized exchange, 5-minute bars
                 value:
@@ -2649,7 +2675,8 @@ paths:
         '400':
           description: |
             Invalid request; `instrument` isn't a plain spot pair; `from >= to`; `cadence` present
-            but not one of its supported values; the requested range exceeds your tier's import
+            but not one of its supported values; a candle import whose `from` is earlier than the
+            history candles reach back; the requested range exceeds your tier's import
             range ceiling; the requested range's rough size estimate exceeds your tier's row limit;
             `dex.network`/`dex.id` not one of their supported values; `dex.contract`/`dex.factory`
             fail basic shape validation; or, when `cadence` is omitted, `dex.id`/`dex.version`
@@ -6505,14 +6532,14 @@ components:
           type: string
           format: date-time
           description: Start of the range to fetch, inclusive. Must be before `to`.
-          example: "2026-08-01T00:00:00Z"
+          example: "2026-10-27T00:00:00Z"
         to:
           type: string
           format: date-time
           description: |
             End of the range to fetch, exclusive. The total span is capped by your tier — a
             request wider than that ceiling is `400`, regardless of source type.
-          example: "2026-08-08T00:00:00Z"
+          example: "2026-10-27T06:00:00Z"
         cadence:
           type: string
           enum: ["1s", "5s", "1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "8h", "12h", "1d", "1w", "1q"]
@@ -6526,7 +6553,8 @@ components:
               cadence: each swap at its own timestamp, so the resulting version's `cadence` is `rt`
               unless the swaps happen to sit on a fixed grid (see `DatasetVersion.cadence`).
               Not every network supports candles — an unsupported combination fails
-              asynchronously, not at request time (see `DatasetImportState.error`).
+              asynchronously, not at request time (see `DatasetImportState.error`). On `solana`,
+              which has candles only, omitted is the plan's default as candles on every plan.
             * `cex` — one of `1s`, `5s`, `1m`, `3m`, `5m`, `15m`, `30m`, `1h`, `2h`, `4h`, `8h`,
               `12h`, `1d`, `1w`, `1q`, whether `dataType` is `ticker` or `klines`. Omitted = the
               plan's default; on a plan that includes the native rate of a source, the finest
@@ -6563,8 +6591,10 @@ components:
       properties:
         network:
           type: string
-          enum: [ethereum, robinhood]
-          description: Which chain the pool/pair lives on.
+          enum: [ethereum, robinhood, solana]
+          description: |
+            Which chain the pool/pair lives on. `solana` has candles only: no per-trade import, so
+            the plan's default cadence is built as candles there on every plan.
           example: "ethereum"
         id:
           type: string
@@ -6582,7 +6612,9 @@ components:
           example: "v3"
         contract:
           type: string
-          description: The pool (v3) or pair (v2) contract address.
+          description: |
+            The pool (v3) or pair (v2) contract address. On `solana`, the pool address in base58,
+            case-sensitive: send it exactly as it is written.
           example: "0x88e6a0c2ddd26feeb64f039a2c41296fcb3f5640"
         factory:
           type: string

@@ -261,7 +261,7 @@ A `dex` import has two data shapes:
 | `from`, `to` | string (date-time) | required, ISO-8601 UTC. `from` inclusive, `to` exclusive, `from < to`. Total span is capped by your tier |
 | `cadence` | string | optional, the same labels as a preparation (`1s` to `1q`; any other value is `400`); one your plan does not include is `402`. For `dex`: candles at that width on a network that supports it; omitted/blank = the plan's default, or native per-trade cadence on a plan that includes the native rate (see below). For `cex`: see [Importing an exchange's history](#importing-an-exchanges-history) |
 | `type` | string | required, `"dex"` \| `"cex"` |
-| `dex.network` | string | required, one of `ethereum` \| `robinhood` |
+| `dex.network` | string | required, one of `ethereum` \| `robinhood` \| `solana`. `solana` has candles only (see below) |
 | `dex.id` | string | required only for the per-trade import (no `cadence`, on a plan that includes the native rate); ignored when candles are built. `"uniswap"` is the only value today — which on-chain DEX protocol `dex.contract` implements |
 | `dex.version` | string | required only for the per-trade import (no `cadence`, on a plan that includes the native rate); ignored when candles are built. `"v2"` \| `"v3"` |
 | `dex.contract` | string | required, the pool (v3) or pair (v2) contract address |
@@ -277,6 +277,21 @@ a candle source behind it. On any other network a plan that does not include per
 be served and the request is `402`; on a plan that does, the `cadence` is ignored and the import
 proceeds as if it were never sent (native, `dex.id`/`dex.version` required). Which networks support candles today
 isn't part of this contract and may change.
+
+**Solana has candles only.** There is no per-trade import for a Solana pool, so there is no
+native-rate case there: a request that names no `cadence` gets the plan's default as candles on every
+plan, elite included (`1s`), and `dex.id`, `dex.version` and `dex.factory` are never needed. Any
+cadence your plan includes can be asked for, and one it does not is `402`, as anywhere. The `dex.contract`
+of a Solana pool is its address in base58, which is case-sensitive: send it exactly as it is written.
+
+**Candles reach back 180 days.** A candle import — one that names a `cadence`, or that gets the plan's
+default — whose `from` is earlier than 180 days before the request is `400`, whatever the network; the
+message says the earliest instant it can read. It is refused up front rather than accepted and failed
+later. The window does not apply to a per-trade import or to a `cex` import.
+
+**A width in which the pool had no trade may have no bar.** Candles of a pool are not a contiguous
+grid: a second (or a minute) with no trade can be absent from the dataset, and that only means the
+price did not move and nothing traded. It is more common at `1s` and on pools that trade rarely.
 
 ```bash
 curl -X POST https://api.qtsurfer.net/v1/datasets/imports \
@@ -307,8 +322,8 @@ curl -X POST https://api.qtsurfer.net/v1/datasets/imports \
   -d '{
     "name": "weth-usdc-1s",
     "instrument": "WETH/USDC",
-    "from": "2026-08-01T00:00:00Z",
-    "to": "2026-08-01T06:00:00Z",
+    "from": "2026-10-27T00:00:00Z",
+    "to": "2026-10-27T06:00:00Z",
     "cadence": "1s",
     "type": "dex",
     "dex": {
@@ -318,11 +333,32 @@ curl -X POST https://api.qtsurfer.net/v1/datasets/imports \
   }'
 ```
 
+The same for a Solana pool — candles only, the address as written:
+
+```bash
+curl -X POST https://api.qtsurfer.net/v1/datasets/imports \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "sol-usdc-5m",
+    "instrument": "SOL/USDC",
+    "from": "2026-10-27T00:00:00Z",
+    "to": "2026-10-27T06:00:00Z",
+    "cadence": "5m",
+    "type": "dex",
+    "dex": {
+      "network": "solana",
+      "contract": "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE"
+    }
+  }'
+```
+
 `importId` is what you poll with, below — there's no separate "finalize" step the way an upload
 has.
 
 Errors: `400` invalid request, `instrument` isn't a plain spot pair, `from >= to`, `cadence`
-present but not one of its supported values, the range exceeds your tier's import ceiling, the
+present but not one of its supported values, a candle import whose `from` is earlier than the
+180 days candles reach back, the range exceeds your tier's import ceiling, the
 range's rough size estimate exceeds your tier's row limit, `dex.network`/`dex.id` not one of their
 supported values, `dex.contract`/`dex.factory` fail basic shape validation, or (when `cadence` is
 omitted on a plan that includes the native rate) `dex.id`/`dex.version` missing (whether the pool/pair actually resolves, and for a candle

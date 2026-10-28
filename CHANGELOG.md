@@ -7,6 +7,24 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ## [Unreleased]
 
+## [0.128.50] — 2026-10-28
+
+### Added
+
+- `importDataset` takes Solana pools: `dex.network` lists `solana`. Solana has candles only, so a request that names no
+  `cadence` gets the plan's default as candles on every plan (elite: `1s`, not a per-trade import, which does not exist
+  there), and `dex.id`, `dex.version` and `dex.factory` are never needed. The address of a Solana pool is base58 and
+  case-sensitive: send it as written. Guide: Datasets (new example), and the `importDataset` operation.
+
+### Changed
+
+- A candle import (one that names a `cadence`, or gets the plan's default) whose `from` is earlier than the history
+  candles reach back, 180 days, is `400` up front, on every network. It used to be accepted and fail afterwards as a
+  whole. A per-trade import and a `cex` import are not held to it. The candle examples of the guide and of the operation
+  now use recent dates.
+- The guide and the operation say that the candles of a pool are not a contiguous grid: a width in which the pool had no
+  trade may have no bar. Guides only, no change to the API.
+
 ## [0.128.49] — 2026-10-26
 
 ### Changed
