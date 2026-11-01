@@ -7,6 +7,17 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ## [Unreleased]
 
+## [0.128.51] — 2026-11-01
+
+### Changed
+
+- QTScript: `atr` and eleven more indicators (`wma`, `tema`, `hma`, `mma`, `kama`, `stdDev`, `variance`, `volatility`,
+  `percentVolatility`, `bollingerPercentB`) are free: a `setup:` line calls them with no `uses` line and on every plan. The
+  free catalogue goes from 28 to 39 names.
+- `pro.atr` no longer exists: the pro set is twelve indicators, and `uses pro.atr` answers `unknown pro indicator 'atr'`
+  with the list of those that exist. A strategy that only uses `atr` now answers `requires: []`.
+- The guide says that `atr` reads whole bars and belongs in a `kline` strategy. Guides only, no change to the schema.
+
 ## [0.128.50] — 2026-10-28
 
 ### Added

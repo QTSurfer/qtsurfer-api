@@ -70,7 +70,8 @@ written without the dot. These are the names that work:
 
 `add` `bollinger` `bollingerBandwidth` `cci` `clamp` `diff` `distance` `distanceMa` `ema` `equal`
 `gain` `greatOrEqual` `greatThan` `lessOrEqual` `lessThan` `loss` `macd` `max` `min` `mul` `notEqual`
-`percentChange` `rateChange` `round` `rsi` `sma` `stochRsi` `sum`
+`percentChange` `rateChange` `round` `rsi` `sma` `stochRsi` `sum` `wma` `tema` `hma` `mma` `kama` `stdDev` `variance`
+`volatility` `percentVolatility` `bollingerPercentB` `atr`
 
 These are the forms of each name that a QTScript line can write: a `String` is the name of an indicator, either one it reads or
 the one it registers, and a `Number` is a whole number or a decimal. What each argument means is in the builder's Javadoc.
@@ -105,6 +106,17 @@ the one it registers, and a `Number` is a whole number or a decimal. What each a
 | `sma` | `sma(int)` · `sma(String, int)` · `sma(String, String, int)` · `sma(String, int, boolean)` |
 | `stochRsi` | `stochRsi(int)` · `stochRsi(String, int)` |
 | `sum` | `sum(String)` · `sum(String, String)` |
+| `wma` | `wma(int)` · `wma(String, int)` |
+| `tema` | `tema(int)` · `tema(String, int)` |
+| `hma` | `hma(int)` · `hma(String, int)` |
+| `mma` | `mma(int)` · `mma(String, int)` · `mma(String, String, int)` |
+| `kama` | `kama()` · `kama(int, int, int)` · `kama(String, int, int, int)` |
+| `stdDev` | `stdDev(int)` · `stdDev(String, int)` · `stdDev(String, String, int)` |
+| `variance` | `variance(int)` · `variance(String, int)` · `variance(String, String, int)` |
+| `volatility` | `volatility(int)` · `volatility(String, int)` |
+| `percentVolatility` | `percentVolatility(int)` · `percentVolatility(String, int)` |
+| `bollingerPercentB` | `bollingerPercentB()` · `bollingerPercentB(int)` · `bollingerPercentB(int, Number)` · `bollingerPercentB(String, int, Number)` |
+| `atr` | `atr()` · `atr(int)` · `atr(String, int)` |
 
 A call whose arguments match none of them is rejected with
 the forms that do exist: `ema(1, 2, 3)` answers that its forms are `ema(int)`, `ema(String, int)` and `ema(String,
@@ -112,9 +124,16 @@ String, int)`. The builder's methods that take a function (`predicate`, `fun`, `
 which takes a function and indicators as objects, can only be written in Java. To compare an indicator with a number, use
 `equal`, `notEqual`, `greatThan`, `greatOrEqual`, `lessThan` or `lessOrEqual`.
 
+Called with no name of its own, the newer ones register `atr14`, `wma5`, `tema4`, `hma6`, `mma7`, `kama10_2_30`,
+`stdDev5`, `variance5`, `vol5` (`volatility`), `pvol5` (`percentVolatility`) and `pctB20_2` (`bollingerPercentB`); a whole
+multiplier drops its decimal part, as in `bollinger`.
+
+`atr` reads whole bars, like the pro indicators do: use it in a [`kline`](#candles) strategy. On a `ticker` strategy its
+values are not the bar's and mean nothing.
+
 A name that is not on the list, and that no `uses` line brings in ([next section](#the-pro-indicators-uses)), is not an
-indicator you can use here, and the strategy is rejected with `unknown indicator '<name>'`: `wma` and `zscore` are
-among the names that answer this way, and so are `atr` and `adx` unless the file brings them in with `uses`. The same
+indicator you can use here, and the strategy is rejected with `unknown indicator '<name>'`: `zscore` is
+among the names that answer this way, and so are `adx` and `kurtosis` unless the file brings them in with `uses`. The same
 goes for `value("name")`, which reads an indicator inside a `{ }` body and has no meaning on a `setup:` line.
 
 ### The pro indicators: `uses`
@@ -122,9 +141,9 @@ goes for `value("name")`, which reads an indicator inside a `{ }` body and has n
 The pro indicators are not in the list above. A file brings them in with a `uses` line, and then calls them in `setup:` by
 their bare name, like any other indicator.
 
-- `uses pro.*` brings in all thirteen. `uses pro.adx, pro.ichimoku` brings in only those. Several `uses` lines add up.
+- `uses pro.*` brings in all twelve. `uses pro.adx, pro.ichimoku` brings in only those. Several `uses` lines add up.
   Write them with `param` and `instruments`, before `setup:`.
-- Only the names that a `uses` line brings in are pro. With `uses pro.atr`, a call to `adx(14)` is still `unknown
+- Only the names that a `uses` line brings in are pro. With `uses pro.obv`, a call to `adx(14)` is still `unknown
   indicator 'adx'`, reported on the line of the call. The builder's own names (`ema`, `rsi` and the rest of the list
   above) are never pro.
 - `pro` is the only set there is. `uses` is a reserved word: a file cannot have a `param` or a section called `uses`.
@@ -136,7 +155,6 @@ their bare name, like any other indicator.
 
 | Indicator | Forms | Registers, with the default arguments | Also registers |
 |---|---|---|---|
-| `atr` | `atr()` · `atr(int)` · `atr(String, int)` | `atr14` | |
 | `adx` | `adx()` · `adx(int)` · `adx(String, int)` | `adx14` | `adx14PlusDI` · `adx14MinusDI` |
 | `superTrend` | `superTrend()` · `superTrend(int, double)` · `superTrend(String)` · `superTrend(String, int, double)` | `st10_3` | `st10_3Upper` · `st10_3Lower` |
 | `ichimoku` | `ichimoku()` · `ichimoku(int, int, int)` · `ichimoku(String)` · `ichimoku(String, int, int, int)` | `ichi9_26_52`, the Tenkan line | `ichi9_26_52Kijun` · `ichi9_26_52SenkouA` · `ichi9_26_52SenkouB` · `ichi9_26_52Chikou` |
@@ -151,7 +169,7 @@ their bare name, like any other indicator.
 | `yangZhang` | `yangZhang(int)` · `yangZhang(String, int)` · `yangZhang(String, int, double)` | `yz20` | |
 
 The `double` of the four volatility estimators is the annualization factor. With other arguments the name follows the same
-pattern: `atr(20)` registers `atr20`, `kurtosis(30)` registers `kurt30`, `ichimoku(7, 22, 44)` registers `ichi7_22_44`, and
+pattern: `mfi(20)` registers `mfi20`, `kurtosis(30)` registers `kurt30`, `ichimoku(7, 22, 44)` registers `ichi7_22_44`, and
 `superTrend(10, 2.5)` registers `st10_2.5` (a whole multiplier loses its decimal: `superTrend(7, 3)` registers `st7_3`).
 With a name as the first argument the indicator registers under that name, and the other indicators it registers take it
 as their prefix: `adx("trend", 14)` registers `trend`, `trendPlusDI` and `trendMinusDI`.
@@ -166,7 +184,7 @@ This reads the ADX with the two directional lines beside it:
 
 ```
 strategy "ADX trend" kline
-uses pro.adx, pro.atr
+uses pro.adx
 
 param adxLevel = 25 "ADX level"
 
@@ -197,11 +215,11 @@ setup:
   yangZhang(20)
 ```
 
-A file that brings in only `atr` and then calls `adx(14)` does not compile. The line of the call is rejected with
+A file that brings in only `obv` and then calls `adx(14)` does not compile. The line of the call is rejected with
 `unknown indicator 'adx'`:
 
 ```
-uses pro.atr
+uses pro.obv
 
 setup:
   adx(14)
@@ -213,10 +231,10 @@ these messages:
 - `uses needs the indicators to bring in: uses pro.* or uses pro.adx, pro.ichimoku`, when nothing follows `uses`.
 - `expected pro.* or pro.<indicator>, found 'pro'`, for `uses pro`.
 - `unknown set 'ta': the only set is pro`, for a set that does not exist.
-- `unknown pro indicator 'zscore': the pro indicators are adx, atr, cmf, garmanKlass, ichimoku, kurtosis, mfi, obv, parkinson,
+- `unknown pro indicator 'zscore': the pro indicators are adx, cmf, garmanKlass, ichimoku, kurtosis, mfi, obv, parkinson,
   rogersSatchell, superTrend, vwap, yangZhang`, for a member that does not exist.
 - `expected pro.* or pro.<indicator> here`, for a comma with nothing after it, as in `uses pro.adx,`.
-- `expected pro.* or pro.<indicator>, found 'pro.adx pro.atr'`, for two members with no comma between them.
+- `expected pro.* or pro.<indicator>, found 'pro.adx pro.obv'`, for two members with no comma between them.
 
 ### The pro indicators and your plan
 
