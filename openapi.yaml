@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: QTSurfer API
   summary: QTSurfer backend services API
-  version: 0.128.51
+  version: 0.128.52
   contact:
     name: QTSurfer Support
     email: support@qtsurfer.com
@@ -2937,14 +2937,26 @@ paths:
               schema:
                 $ref: '#/components/schemas/ResponseError'
         '409':
-          description: A run for this strategy is already active. Stop it first.
+          description: |
+            A run for this strategy is already active (stop it first), or the strategy as it was compiled no longer
+            works with the current version of the platform because a release removed something it calls. In that
+            case no run is created and no place is taken: register the strategy again (`POST /strategy` with the same
+            source) and start it. The message says which of the two it is.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResponseError'
-              example:
-                code: 409
-                message: A live run is already active for strategy 6bsh31ikwkuivhtgcoa6s4 -- stop it before starting another
+              examples:
+                alreadyActive:
+                  summary: A run for this strategy is already active
+                  value:
+                    code: 409
+                    message: A live run is already active for strategy 6bsh31ikwkuivhtgcoa6s4 -- stop it before starting another
+                notCompatible:
+                  summary: The compiled strategy no longer works with the platform
+                  value:
+                    code: 409
+                    message: The strategy was compiled for an earlier version of the platform and no longer works with the current one. Register it again to start a new run.
         '402':
           description: |
             Your plan does not include what the request asks for. The message says which, in one of these

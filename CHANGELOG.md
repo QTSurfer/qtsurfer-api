@@ -7,6 +7,17 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ## [Unreleased]
 
+## [0.128.52] — 2026-11-01
+
+### Changed
+
+- `startLive` answers `409` when the strategy, as it was compiled, no longer works with the current version of the platform
+  (a release removed something it calls), with the message "The strategy was compiled for an earlier version of the platform and no longer works with the current one. Register it again to start a new run." No run is created and no place is taken; register the
+  strategy again and start it. It was accepted and then ended by the platform within seconds.
+- A run that stops for that reason carries the same sentence as its `reason` in `GET /strategy/{strategyId}/live` and
+  `GET /live`, and is stopped for good (`desired` becomes `STOPPED`) so it holds no place. Guides: Live, "A failed run is
+  final" and "Why a run failed or stopped".
+
 ## [0.128.51] — 2026-11-01
 
 ### Changed
