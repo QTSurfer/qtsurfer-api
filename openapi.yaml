@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: QTSurfer API
   summary: QTSurfer backend services API
-  version: 0.128.52
+  version: 0.128.53
   contact:
     name: QTSurfer Support
     email: support@qtsurfer.com
@@ -1395,6 +1395,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResponseError'
+        '409':
+          description: |
+            The strategy, as it was compiled, no longer works with the current version of the platform because a release
+            removed something it calls. Nothing is enqueued: register the strategy again (`POST /strategy` with the same
+            source) and submit again.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+              example:
+                code: 409
+                message: The strategy was compiled for an earlier version of the platform and no longer works with the current one. Register it again to start a new run.
         '402':
           description: |
             The strategy uses the pro indicators and your plan does not include them: the message names the first
@@ -1892,6 +1904,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResponseError'
+        '409':
+          description: |
+            The strategy, as it was compiled, no longer works with the current version of the platform because a release
+            removed something it calls. Nothing is enqueued: register the strategy again (`POST /strategy` with the same
+            source) and submit again.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+              example:
+                code: 409
+                message: The strategy was compiled for an earlier version of the platform and no longer works with the current one. Register it again to start a new run.
         '400':
           description: |
             Invalid request or parameters. Also returned for a `type` that cannot be executed yet

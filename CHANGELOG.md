@@ -7,6 +7,15 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ## [Unreleased]
 
+## [0.128.53] — 2026-11-02
+
+### Changed
+
+- `executeBacktest` and `executeSweep` (walk-forward included) answer `409` when the strategy, as it was compiled, no longer
+  works with the current version of the platform (a release removed something it calls), with the message "The strategy was compiled for an earlier version of the platform and no longer works with the current one. Register it again to start a new run." Nothing is
+  enqueued; register the strategy again and submit again. It was accepted and then failed as a job. Same answer as
+  `startLive` (0.128.52). Guides: Backtests, Parameter Sweeps.
+
 ## [0.128.52] — 2026-11-01
 
 ### Changed
