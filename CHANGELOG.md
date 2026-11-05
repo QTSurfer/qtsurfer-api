@@ -7,6 +7,14 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ## [Unreleased]
 
+## [0.128.54] — 2026-11-04
+
+### Changed
+
+- Guides: the pro indicators. Eleven of the twelve read whole bars and mean nothing on a `ticker` strategy (the engine notice
+  says so); `kurtosis` is the exception: it reads the close, so it means something on a `ticker` strategy and raises no
+  notice. The guides said that all twelve read bars.
+
 ## [0.128.53] — 2026-11-02
 
 ### Changed

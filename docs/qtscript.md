@@ -147,8 +147,9 @@ their bare name, like any other indicator.
   indicator 'adx'`, reported on the line of the call. The builder's own names (`ema`, `rsi` and the rest of the list
   above) are never pro.
 - `pro` is the only set there is. `uses` is a reserved word: a file cannot have a `param` or a section called `uses`.
-- Pro indicators read whole bars, so use them in a [`kline`](#candles) strategy. On a `ticker` strategy the values are not
-  the bar's and mean nothing, and validating or running the strategy returns an engine notice that says so.
+- Eleven of the twelve pro indicators read whole bars, so use them in a [`kline`](#candles) strategy. On a `ticker` strategy
+  their values are not the bar's and mean nothing, and validating or running the strategy returns an engine notice that says
+  so. `kurtosis` is the exception: it reads the close, so it means something on a `ticker` strategy and raises no notice.
 - A pro line is an ordinary `setup:` line: one call per line, with a window after it as usual.
 - Backtests, sweeps (walk-forward included), [`validate`](strategy.md#checking-it-actually-runs) and live runs run the pro
   indicators.
