@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: QTSurfer API
   summary: QTSurfer backend services API
-  version: 0.128.54
+  version: 0.128.55
   contact:
     name: QTSurfer Support
     email: support@qtsurfer.com
@@ -36,6 +36,13 @@ paths:
         expires after `expires_in` seconds. Callers should refresh the token
         before expiry (or on a `401` response) by calling this endpoint again.
 
+        An API key can have an expiry of its own. When it does, the answer's `key_exp` says when
+        the key stops working, in seconds since epoch, so you can rotate it ahead of time instead
+        of finding out from a `401`. The same value is the `key_exp` claim of the token and the
+        `apiKeyExpiresAt` of `GET /account`. A key that never expires has no `key_exp`. It is the
+        key's expiry, not the token's: a token issued just before the key lapses keeps working
+        until its own `expires_in` is over.
+
         The answer's `scopes` say what the key may do. Where a deployment requires scopes, a key
         that carries none is refused with `403` and the code `apikey_without_scopes`: create a key
         with at least one scope.
@@ -54,15 +61,19 @@ paths:
                   backtests: [read, write, execute]
                   exchanges: [read]
                 tier: free
+                key_exp: 1796465100
         '401':
-          description: API key is invalid, revoked, or expired.
+          description: |
+            The API key is missing, unknown, revoked or expired. The answer is the same for all four:
+            it does not say which, so a key that used to work and now gets this one has most likely
+            lapsed or been revoked. Read `key_exp` (or `apiKeyExpiresAt` on `GET /account`) ahead of
+            time to know when.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthTokenError'
+                $ref: '#/components/schemas/AuthTokenRejected'
               example:
-                code: invalid_apikey
-                message: API key not recognized
+                error: invalid_credentials
         '403':
           description: The API key is valid but carries no scopes, and this deployment requires them.
           content:
@@ -70,6 +81,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/AuthTokenError'
               example:
+                error: apikey_without_scopes
                 code: apikey_without_scopes
                 message: This API key has no scopes. Create a key with at least one scope in the web app.
         '429':
@@ -4475,6 +4487,16 @@ components:
           example: "free"
         scopes:
           $ref: '#/components/schemas/KeyScopes'
+        apiKeyExpiresAt:
+          type: ['string', 'null']
+          format: date-time
+          description: |
+            When the API key behind this token stops working, UTC. Always in the answer; `null` when
+            no key expiry applies: a key that never expires, a token issued before this field existed
+            (ask for a new one), or a credential that is not an API key. It is the same moment as the
+            `key_exp` of `POST /auth/token`. Rotate the key before it: after it, `POST /auth/token`
+            answers `401`. A token already issued keeps working until its own expiry.
+          example: "2026-12-05T10:05:00Z"
         maxExecute:
           type: integer
           description: |
@@ -6824,14 +6846,37 @@ components:
           enum: [free, basic, pro, elite]
           description: Subscription tier this token was issued for. Drives rate limits and feature flags on downstream endpoints.
           example: free
+        key_exp:
+          type: integer
+          format: int64
+          description: |
+            When the API key this token was issued for stops working, in seconds since epoch, like the
+            `exp` of the token. Absent when the key never expires. This is the key's expiry, not the
+            token's (`expires_in` is the token's). Create a new key in the web app before it.
+          example: 1796465100
+    AuthTokenRejected:
+      type: object
+      required: [error]
+      description: |
+        Answer of `POST /auth/token` (`401`) when the API key is missing, unknown, revoked or expired.
+        One value for all four: the route does not tell them apart.
+      properties:
+        error:
+          type: string
+          enum: [invalid_credentials]
+          description: Machine-readable reason.
     AuthTokenError:
       type: object
       required: [code, message]
-      description: Error envelope returned by `POST /auth/token` when the API key is rejected (`401`) or carries no scopes where scopes are required (`403`).
+      description: Error envelope returned by `POST /auth/token` (`403`) when the API key carries no scopes and scopes are required.
       properties:
+        error:
+          type: string
+          enum: [apikey_without_scopes]
+          description: The same value as `code`; the field the other answers of this route carry.
         code:
           type: string
-          enum: [invalid_apikey, apikey_revoked, apikey_expired, apikey_without_scopes]
+          enum: [apikey_without_scopes]
           description: Machine-readable error reason.
         message:
           type: string

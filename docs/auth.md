@@ -18,7 +18,8 @@ curl -X POST https://api.qtsurfer.net/v1/auth/token \
   "token_type": "Bearer",
   "expires_in": 3600,
   "scopes": { "backtests": ["read", "write", "execute"], "exchanges": ["read"] },
-  "tier": "free"
+  "tier": "free",
+  "key_exp": 1796465100
 }
 ```
 
@@ -29,15 +30,38 @@ curl -X POST https://api.qtsurfer.net/v1/auth/token \
 | `expires_in` | seconds until the token expires. Ask for a new one before then, or on a `401` |
 | `scopes` | what your key may do, [below](#scopes) |
 | `tier` | the subscription tier the token was issued for; it sets your limits, see [Account](account.md) |
+| `key_exp` | when your API key stops working, in seconds since epoch. Absent for a key that never expires. It is the key's expiry, not the token's, see [When your key expires](#when-your-key-expires) |
 
 Send a `User-Agent` of your own. A request that carries the default of some HTTP libraries, Python's `urllib`
 among them, is turned away at the network edge before it reaches the API, with a `403` whose body is the plain text
 `error code: 1010` and not the JSON the API answers with. That is not a problem with your key: set a `User-Agent`
 header, the name of your tool is enough, and send the request again. `curl` and browsers send one already.
 
-A key that is unknown, revoked or expired is answered `401`; the body is `AuthTokenError` in the
-API reference. Where a deployment requires scopes, a key that carries none is answered `403` with
-the code `apikey_without_scopes` and no token: create a key with at least one scope in the web app.
+A key that is missing, unknown, revoked or expired is answered `401` with `{"error": "invalid_credentials"}`
+(`AuthTokenRejected` in the API reference). The answer is the same for all four: it does not say which, so
+read the expiry of your key ahead of time, [below](#when-your-key-expires), rather than from this answer.
+Where a deployment requires scopes, a key that carries none is answered `403` with the code
+`apikey_without_scopes` and no token (`AuthTokenError`): create a key with at least one scope in the web app.
+
+## When your key expires
+
+An API key can have an expiry of its own. It is readable in three places, all the same moment, so a client can
+rotate the key ahead of time instead of learning of it from a `401`:
+
+| Where | Field | Form |
+|---|---|---|
+| the answer of `POST /auth/token` | `key_exp` | seconds since epoch, like the `exp` of the token |
+| the token itself | the `key_exp` claim | the same number |
+| [`GET /account`](account.md#getting-your-tier-and-limits) | `apiKeyExpiresAt` | ISO-8601 in UTC, or `null` |
+
+- `key_exp` is **absent** from the answer for a key that never expires, and `apiKeyExpiresAt` is then `null`.
+  `null` also comes back for a token issued before the field existed (ask for a new one) and for a credential that
+  is not an API key: it means that no key expiry applies, not that it is unknown.
+- It is the **key's** expiry, not the token's. `expires_in` and `exp` are the token's own hour. A token issued
+  just before the key lapses keeps working until its own `exp`; after the key's expiry, asking for a new token
+  with it is answered `401`.
+- Rotation: create the new key in the web app before `key_exp`, switch your client to it, and the old key can
+  lapse. A client that stores the key can read `key_exp` from any token answer and warn, say, a week before it.
 
 ## Scopes
 

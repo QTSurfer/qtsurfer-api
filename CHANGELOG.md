@@ -7,6 +7,26 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ## [Unreleased]
 
+## [0.128.55] — 2026-11-08
+
+### Added
+
+- The expiry of an API key is readable. `POST /auth/token` answers `key_exp` (seconds since epoch) when the key has an
+  expiry, the token carries the same value as its `key_exp` claim, and `GET /account` answers `apiKeyExpiresAt`
+  (ISO-8601, UTC; `null` when no key expiry applies). A key that never expires has no `key_exp`. It is the key's
+  expiry, not the token's: `expires_in` is unchanged, and a token issued just before the key lapses lasts out its own
+  hour. Before this the only signal was the first `401` after the key had lapsed. Guides: Authentication and scopes
+  ("When your key expires"), Account.
+
+### Changed
+
+- `POST /auth/token` `401` is described as the route sends it: `{"error": "invalid_credentials"}` (new schema
+  `AuthTokenRejected`), the same for a key that is missing, unknown, revoked or expired. The contract listed
+  `invalid_apikey`, `apikey_revoked` and `apikey_expired` as the `code` of that answer; the route has never sent them,
+  so they are removed from `AuthTokenError`, which now describes only the `403` (`apikey_without_scopes`) and shows the
+  `error` field that answer also carries. A client that matched on one of the removed codes never saw it. Regenerate
+  the clients to drop the unused values.
+
 ## [0.128.54] — 2026-11-04
 
 ### Changed

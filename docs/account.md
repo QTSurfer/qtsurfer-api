@@ -24,6 +24,7 @@ curl https://api.qtsurfer.net/v1/account \
   "userId": "00000000-0000-0000-0000-000000000000",
   "tier": "free",
   "scopes": { "backtests": ["read", "write", "execute"], "exchanges": ["read"] },
+  "apiKeyExpiresAt": "2026-12-05T10:05:00Z",
   "maxExecute": 10,
   "maxRangeDays": 7,
   "maxSweepCartesian": 100,
@@ -43,6 +44,7 @@ curl https://api.qtsurfer.net/v1/account \
 | `userId` | your account id — the JWT `sub` claim |
 | `tier` | your current subscription tier |
 | `scopes` | what your API key may do: a map from a resource to its actions, in lower case; `{}` for a key with none. The same map as the `scopes` of the token answer, without asking for a new token. See [Authentication and scopes](auth.md#scopes) |
+| `apiKeyExpiresAt` | when your API key stops working, ISO-8601 in UTC; always in the answer, and `null` when no key expiry applies (a key that never expires, a token issued before the field existed, or a credential that is not an API key). The same moment as the `key_exp` of the token answer. Create a new key in the web app before it. See [When your key expires](auth.md#when-your-key-expires) |
 | `maxExecute` | maximum number of strategy executions (and sweeps) you can have running at the same time through the API. Starting one past this number is answered with `429`, whose message carries the same number. The value already includes any API allowance your plan has |
 | `maxRangeDays` | maximum length, in days, of the time range of a backtest on one of your own [datasets](datasets.md) |
 | `maxSweepCartesian` | largest full grid, in parameter combinations, a [sweep](backtest_sweep.md#how-large-a-grid-may-be) may run with the `grid` sampler. A larger grid is refused with `400`; the `random` and `lhs` samplers are not held to it |
