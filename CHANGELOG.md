@@ -7,6 +7,19 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ## [Unreleased]
 
+## [0.128.56] — 2026-11-09
+
+### Changed
+
+- The `timestamp` column of a CSV dataset upload reads more forms. A date alone (`2010-06-29`) is midnight UTC; a date-time
+  with no zone (`2010-06-29T14:30:00`, or with a space, `2010-06-29 14:30:00`) is UTC; seconds are optional; an offset or
+  `Z` is honoured; epoch seconds, milliseconds and microseconds are read as before. Until now only a complete instant
+  (`2010-06-29T00:00:00Z`) was accepted, although the guide said ISO-8601, so a daily series that carries dates alone
+  could not be uploaded. Day-first and month-first dates are still not accepted (they are ambiguous). A timestamp in none
+  of the accepted forms fails the upload with an error that names the line and lists the forms that would have been
+  accepted. Plain, `.gz` and `.zip` uploads read alike. Guides: Datasets ("The timestamp column"), the upload description
+  of the OpenAPI.
+
 ## [0.128.55] — 2026-11-08
 
 ### Added

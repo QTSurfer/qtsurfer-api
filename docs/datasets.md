@@ -102,9 +102,9 @@ Errors: `404` no such dataset for this user.
 **CSV, parquet, or lastra.** A CSV needs a header row; a parquet file carries its columns by name
 already; a `lastra` file is our own native columnar format — the same one a dataset's `dataUrl`
 hands you back by default, so downloading a dataset and handing that exact file to another user to
-upload works with no conversion in between. For CSV/parquet, `timestamp` (ISO-8601, or numeric
-epoch seconds / millis / micros — detected from the first row, then enforced for every later row)
-and `close` are required; optional: `open`, `high`, `low`, `volume`, `quoteVolume`, `bid`,
+upload works with no conversion in between. For CSV/parquet, `timestamp` (an ISO-8601 date or
+date-time, with no zone meaning UTC, or numeric epoch seconds / millis / micros — [the forms are
+listed below](#the-timestamp-column)) and `close` are required; optional: `open`, `high`, `low`, `volume`, `quoteVolume`, `bid`,
 `bidSize`, `ask`, `askSize`. A lastra upload carries its own fixed column set instead (it's already
 a `dataUrl` download, not a format you construct by hand) and only needs a timestamp series and a
 close series present. **Cadence and timestamp unit are discovered from the data, not declared,**
@@ -126,6 +126,39 @@ curl -X PUT "$UPLOAD_URL" --data-binary @my-btc-ticks.csv
 # or gzip/zip it first -- detected from content, no extra parameter needed
 curl -X PUT "$UPLOAD_URL" --data-binary @my-btc-ticks.csv.gz
 ```
+
+### The timestamp column
+
+The `timestamp` of a CSV reads in any of these forms:
+
+| Form | Examples | Read as |
+|---|---|---|
+| ISO-8601 date | `2010-06-29` | midnight UTC, `2010-06-29T00:00:00Z` |
+| ISO-8601 date-time with a zone | `2010-06-29T14:30:00Z`, `2010-06-29T14:30:00+02:00`, `2010-06-29T14:30:00.123Z` | that instant; an offset is honoured |
+| ISO-8601 date-time with no zone | `2010-06-29T14:30:00`, `2010-06-29T14:30` | that wall-clock time **in UTC** |
+| the same with a space instead of `T` | `2010-06-29 14:30:00` | that wall-clock time in UTC (or the zone, if it names one) |
+| epoch seconds, milliseconds or microseconds | `1277821800`, `1277821800000`, `1277821800000000` | the unit is read off the magnitude of the first row |
+
+- **No zone means UTC.** A file exported in local time must carry the zone, or be converted, before
+  it is uploaded: its rows are otherwise read as UTC.
+- The first row decides whether the column is ISO-8601 or epoch, and every later row must be of the
+  same kind. Epoch rows must also stay in the unit the first row set; ISO-8601 rows may mix a date
+  and a date-time.
+- Timestamps must strictly increase. Cadence and gaps are discovered as for any file: a daily
+  series, dates alone, has cadence `1d`, and a day with no row (a weekend, say) counts in `gaps`
+  and is not an error. The version reports `timestampUnit: "iso"` for every ISO-8601 form.
+- Not accepted: day-first or month-first dates (`29/06/2010`, `06/29/2010`) and month names, which
+  are ambiguous. Rewrite such a column as ISO-8601 before uploading.
+
+A timestamp in none of those forms fails the upload: `status` is `failed` and `error` names the line
+(line 1 is the header) and what would have been accepted:
+
+```
+line 2: not a valid timestamp: 29/06/2010. Accepted: an ISO-8601 date (2010-06-29, read as midnight UTC), an ISO-8601 date-time with or without a zone (2010-06-29T14:30:00Z, 2010-06-29 14:30:00; no zone means UTC), or epoch seconds, milliseconds or microseconds.
+```
+
+A later row that is not of the kind the first row set says so: `Line 2 was read as ISO-8601, so every
+later line must be one too.`
 
 ## Finalizing an upload (triggering ingest)
 
@@ -181,7 +214,7 @@ case below).
 
 | Field | Notes |
 |---|---|
-| `status` | `uploading` (file `PUT`, not finalized yet) → `ingesting` (finalize called, worker parsing/validating) → `ready` (`version` carries the result) \| `failed` (e.g. bad CSV contract, mixed timestamp units, a `.zip` with no file inside or more than one) |
+| `status` | `uploading` (file `PUT`, not finalized yet) → `ingesting` (finalize called, worker parsing/validating) → `ready` (`version` carries the result) \| `failed` (e.g. bad CSV contract, a [timestamp](#the-timestamp-column) in none of the accepted forms, mixed timestamp units, a `.zip` with no file inside or more than one) |
 | `jobId` | the ingest job id, while `status` is `ingesting` |
 | `error` | human-readable reason, present when `status` is `failed`. Durably recorded alongside the failure — stays available however long after the fact you poll |
 | `version` | a [`DatasetVersion`](#datasetversion--one-successfully-ingested-upload), present when `status` is `ready` or `failed` |

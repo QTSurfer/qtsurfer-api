@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: QTSurfer API
   summary: QTSurfer backend services API
-  version: 0.128.55
+  version: 0.128.56
   contact:
     name: QTSurfer Support
     email: support@qtsurfer.com
@@ -2156,9 +2156,12 @@ paths:
         **Upload format.** A CSV with a header row, a parquet file with the same columns by
         name, or a lastra file — our own native columnar format, the same one a dataset's
         `dataUrl` hands back by default, so a downloaded dataset can be handed to another user to
-        upload with no conversion in between. For CSV/parquet, required: `timestamp` (ISO-8601, or
-        numeric epoch seconds/millis/micros — detected from the first row, then enforced for every
-        later row), `close`. Optional: `open`, `high`, `low`, `volume`, `quoteVolume`, `bid`,
+        upload with no conversion in between. For CSV/parquet, required: `timestamp` (an ISO-8601
+        date or date-time, or numeric epoch seconds/millis/micros — detected from the first row,
+        then enforced for every later row), `close`. A date alone (`2010-06-29`) is midnight UTC; a
+        date-time with no zone (`2010-06-29T14:30:00` or `2010-06-29 14:30:00`) is UTC; an offset
+        or `Z` is honoured; day-first and month-first dates are not accepted. The Datasets guide
+        lists the forms. Optional: `open`, `high`, `low`, `volume`, `quoteVolume`, `bid`,
         `bidSize`, `ask`, `askSize`. A lastra upload carries its own fixed column set instead and
         only needs a timestamp series and a close series present. Cadence and timestamp unit are
         discovered from the data, not declared, for all three.
@@ -6564,9 +6567,11 @@ components:
           type: string
           description: |
             A human-readable reason, present when `status` is `failed` (e.g. bad CSV contract,
-            mixed timestamp units, a `.zip` with no file inside or more than one). Durably
-            recorded alongside the failure itself, so it stays available however long after the
-            fact you poll — not tied to how recently the failure happened.
+            mixed timestamp units, a `.zip` with no file inside or more than one). A timestamp
+            that reads as none of the accepted forms is named with its line and the forms that
+            would have been accepted. Durably recorded alongside the failure itself, so it stays
+            available however long after the fact you poll — not tied to how recently the failure
+            happened.
           example: "line 3: column 'close' is not a number: not-a-number"
         version:
           allOf:
