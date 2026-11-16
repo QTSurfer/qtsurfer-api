@@ -385,7 +385,7 @@ source that the platform will not follow fails as it always has (see [Why a run 
 stopped](#why-a-run-failed-or-stopped)), and so does one whose first source, attached while it waited, is such a pool. A pool
 attached to a run that is already reading is taken away instead, without failing the run: it ends `DETACHED` with the
 `reason` `REFUSED` (it is not a pool of that protocol on that chain) or `CAPACITY` (the platform has no room to follow it),
-usually within half a minute of the attach taking effect, and the strategy's `onDetach` is told the same reason.
+usually within half a minute of the attach taking effect, and the strategy's `onDetach` is told `CAPACITY` when the platform has no room and `REFUSED` otherwise, `SAME_PAIR` included.
 
 ### Detaching
 

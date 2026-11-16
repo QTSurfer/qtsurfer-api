@@ -473,7 +473,7 @@ Inside either body `$context` is the attachment, with these accessors and nothin
 | `$context.getInstrumentCount()`, `$context.getInstrument(i)` | how many instruments the attachment reads, and the `i`th as a symbol |
 | `$context.hasInstrument("BTC/USDT")` | whether it reads that instrument |
 | `$context.isWarmingUp()` | whether the attachment has a warm-up to replay (`warmFrom` above `0`) |
-| `$context.getReason()` | never `null`: `""` in `onAttach`; in `onDetach` one of `"OWNER"`, `"REFUSED"`, `"POOL_GONE"`, `"CAPACITY"` or `"FUNDS"`. A source dropped for lack of data arrives as `"REFUSED"` |
+| `$context.getReason()` | never `null`: `""` in `onAttach`; in `onDetach` one of `"OWNER"`, `"REFUSED"`, `"POOL_GONE"`, `"CAPACITY"` or `"FUNDS"`. A source dropped for lack of data, and a `dex` pool of a pair the run already reads (`SAME_PAIR` on the attachment), arrive as `"REFUSED"` |
 
 Compare with `"OWNER".equals($context.getReason())`, which reads the same whatever the value. As in `onCommand`, nothing
 a window body has (`actual`, `$indicator`, `value(...)`, the ambient `store`) is in scope, because the attachment is

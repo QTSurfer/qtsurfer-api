@@ -15,7 +15,7 @@ pre-1.0, its version follows the version in `openapi.yaml`.
   accepted. A `dex` pool is one address (`0x` and 40 hexadecimal digits, case does not matter) and is kept in lower case.
 - A `dex` pool attached to a run that is already reading is taken away, without failing the run, when the platform cannot follow
   it: `DETACHED` with the `reason` `REFUSED` or `CAPACITY`, or `SAME_PAIR` when the run already reads another pool of the same pair
-  (the strategy sees the pair, never the pool). The strategy's `onDetach` is told the same reason.
+  (the strategy sees the pair, never the pool). The strategy's `onDetach` is told `CAPACITY` when the platform has no room, and `REFUSED` for the other two (`SAME_PAIR` included).
 
 ## [0.128.57] — 2026-11-11
 

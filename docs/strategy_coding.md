@@ -444,7 +444,7 @@ without segments); `getVenueType()` (the enum `VenueType`: `CEX`, `DEX`) and `ge
 `"kline"` or `"funding"`) as the same values in text; `getInstrumentCount()`, `getInstrument(int)` (the symbol),
 `hasInstrument(String)` and `instrumentList()`; `isWarmingUp()`; and `getReason()`, never `null`: `""` on an attach and, on
 a detach, one of `REASON_OWNER`, `REASON_REFUSED`, `REASON_POOL_GONE`, `REASON_CAPACITY` or `REASON_FUNDS` (as text:
-`"OWNER"`, ...). A source dropped for lack of data arrives as `REASON_REFUSED`.
+`"OWNER"`, ...). A source dropped for lack of data, and a `dex` pool of a pair the run already reads (`SAME_PAIR` on the attachment), arrive as `REASON_REFUSED`.
 
 Both methods run on the same thread as `update()`, right before the first market event of the new source (or, for a
 detach, before the first event the run no longer reads), so they see the strategy's state exactly as it was at that point
