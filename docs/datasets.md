@@ -398,15 +398,21 @@ omitted on a plan that includes the native rate) `dex.id`/`dex.version` missing 
 `cadence` whether that combination is servable on the requested network, is checked later,
 asynchronously — see `failed` below) · `402` `cadence` is not one of your plan's, or per-trade data your
 plan does not include · `409` dataset name already taken · `429` your tier's dataset
-count limit is reached, or your account's total storage limit ([`GET /account`](account.md)'s
-`maxTotalStorageBytes`) is already reached — delete a dataset to free a slot or space, or upgrade.
+count limit is reached, your account's total storage limit ([`GET /account`](account.md)'s
+`maxTotalStorageBytes`) is already reached, or you already have as many imports in flight as your
+tier allows (`maxConcurrentImports`) — delete a dataset to free a slot or space, wait for an import
+to finish, or upgrade. An import is in flight from the moment it is accepted until it is ready or
+has failed; you do not have to poll it for its place to be freed.
 
 ### Importing an exchange's history
 
 `type: "cex"` imports one instrument of a centralized exchange over a range. The same endpoint, the
-same `name`, `instrument`, `from`, `to` and `cadence` fields, the same limits (the range is capped by
-your tier's `maxImportRangeHours`, [`GET /account`](account.md)) and the same poll below; only the
-block that says what to import changes:
+same `name`, `instrument`, `from`, `to` and `cadence` fields, the same poll below and the same limits,
+except the range: it is capped by your tier's `maxCexImportRangeHours` ([`GET /account`](account.md)),
+in hours and apart from a pool's `maxImportRangeHours`. The history is already kept by the platform,
+so on the larger plans the range reaches weeks; what bounds it is how much you then load, a bar a
+second being about 57 bytes in the stored file and 88 in memory. Only the block that says what to
+import changes:
 
 | Field | Type | Notes |
 |---|---|---|

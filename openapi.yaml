@@ -2592,8 +2592,10 @@ paths:
         A `cex` import covers one instrument over a range: the API reads that range of the
         exchange's history, builds the bars of the requested `cadence` from the finest data it has
         for it, and stores the result as a dataset version, exactly as for an upload. `cex.dataType`
-        picks tickers or klines and is also the resulting dataset's `type`. The range is capped by
-        your tier like any import (`maxImportRangeHours` of `GET /account`).
+        picks tickers or klines and is also the resulting dataset's `type`. The range of a `cex`
+        import is capped by your tier's `maxCexImportRangeHours` of `GET /account`, in hours and
+        counted apart from a pool's (`maxImportRangeHours`): the history is already kept by the
+        platform, so it reaches weeks on the larger plans.
 
         **An import is held to your plan's cadences,** the same ones as the preparation of an
         exchange's data (the "Cadences by plan" section of the Backtests guide). A `cadence` your plan does not include is `402`; a
@@ -2760,9 +2762,10 @@ paths:
                 $ref: '#/components/schemas/ResponseError'
         '429':
           description: |
-            Your tier's dataset count limit is reached, or your account's total storage limit
-            (`GET /account`'s `maxTotalStorageBytes`) is already reached. Delete a dataset to free
-            a slot or space, or upgrade.
+            Your tier's dataset count limit is reached, your account's total storage limit
+            (`GET /account`'s `maxTotalStorageBytes`) is already reached, or you already have as
+            many imports in flight as your tier allows (`maxConcurrentImports`). Delete a dataset
+            to free a slot or space, wait for an import to finish, or upgrade.
           content:
             application/json:
               schema:
@@ -4628,7 +4631,7 @@ components:
         page load. Live usage against these limits is a separate resource, `GET /account/usage`,
         deliberately: usage changes on every upload/execution and costs a query to compute, this
         one doesn't.
-      required: [userId, tier, scopes, maxExecute, maxRangeDays, maxSweepCartesian, maxImportRangeHours, maxDatasets, maxDatasetBytes, maxTotalStorageBytes, _links]
+      required: [userId, tier, scopes, maxExecute, maxRangeDays, maxSweepCartesian, maxImportRangeHours, maxCexImportRangeHours, maxConcurrentImports, maxDatasets, maxDatasetBytes, maxTotalStorageBytes, _links]
       properties:
         userId:
           type: string
@@ -4670,8 +4673,16 @@ components:
           example: 100
         maxImportRangeHours:
           type: integer
-          description: Maximum length, in hours, of the time range of one dataset import from an exchange.
+          description: "Maximum length, in hours, of the time range of one dataset import of a decentralized exchange's pool (`type: dex`)."
           example: 6
+        maxCexImportRangeHours:
+          type: integer
+          description: "Maximum length, in hours, of the time range of one dataset import of a centralized exchange's history (`type: cex`). It is counted apart from `maxImportRangeHours`."
+          example: 24
+        maxConcurrentImports:
+          type: integer
+          description: "Maximum number of dataset imports your account may have in flight at once, queued or running, whether of an exchange's history or of a pool. A new import over it is refused with `429` until one has finished."
+          example: 1
         maxDatasets:
           type: integer
           description: Maximum number of active datasets your tier allows.

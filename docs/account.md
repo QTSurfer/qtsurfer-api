@@ -29,6 +29,8 @@ curl https://api.qtsurfer.net/v1/account \
   "maxRangeDays": 7,
   "maxSweepCartesian": 100,
   "maxImportRangeHours": 6,
+  "maxCexImportRangeHours": 24,
+  "maxConcurrentImports": 1,
   "maxDatasets": 3,
   "maxDatasetBytes": 52428800,
   "maxTotalStorageBytes": 104857600,
@@ -48,7 +50,9 @@ curl https://api.qtsurfer.net/v1/account \
 | `maxExecute` | maximum number of strategy executions (and sweeps) you can have running at the same time through the API. Starting one past this number is answered with `429`, whose message carries the same number. The value already includes any API allowance your plan has |
 | `maxRangeDays` | maximum length, in days, of the time range of a backtest on one of your own [datasets](datasets.md) |
 | `maxSweepCartesian` | largest full grid, in parameter combinations, a [sweep](backtest_sweep.md#how-large-a-grid-may-be) may run with the `grid` sampler. A larger grid is refused with `400`; the `random` and `lhs` samplers are not held to it |
-| `maxImportRangeHours` | maximum length, in hours, of the time range of one dataset import from an exchange. See [Importing a dataset instead of uploading one](datasets.md#importing-a-dataset-instead-of-uploading-one) |
+| `maxImportRangeHours` | maximum length, in hours, of the time range of one dataset import of a decentralized exchange's pool (`type: dex`). See [Importing a dataset instead of uploading one](datasets.md#importing-a-dataset-instead-of-uploading-one) |
+| `maxCexImportRangeHours` | maximum length, in hours, of the time range of one dataset import of a centralized exchange's history (`type: cex`), counted apart from `maxImportRangeHours`. See [Importing an exchange's history](datasets.md#importing-an-exchanges-history) |
+| `maxConcurrentImports` | maximum number of [dataset imports](datasets.md#importing-a-dataset-instead-of-uploading-one) your account may have in flight at once, queued or running, whether of an exchange's history or of a pool. A new import over it is refused with `429` until one has finished |
 | `maxDatasets` | maximum number of active [datasets](datasets.md) your tier allows |
 | `maxDatasetBytes` | maximum size, in bytes, of a single dataset version **as stored** (the `bytes` of its ready version: for a CSV upload, the converted file, not the file you upload). See [Size limits](datasets.md#size-limits) |
 | `maxTotalStorageBytes` | maximum combined storage, in bytes, across every dataset, strategy-execution signal, and registered strategy on your account — see below |
