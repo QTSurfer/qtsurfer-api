@@ -409,6 +409,62 @@ A QTScript strategy implements it too, through its own `onCommand { }` section (
 
 See [Commands](live.md#commands) for the request/response shape and error codes.
 
+## Attaching and detaching a source
+
+A live run can start with no market-data source and have one attached, detached and attached again by its owner
+([Attaching and detaching a source](live.md#attaching-and-detaching-a-source)). A strategy is told of each through two
+methods of `Strategy`, empty unless you override them:
+
+```java
+import com.wualabs.qtsurfer.engine.strategy.StrategyContext;
+
+public class Watcher extends AbstractKlineStrategy {
+
+    private final Set<String> watching = new HashSet<>();
+
+    @Override
+    public void onAttach(StrategyContext context) {
+        for (int i = 0; i < context.getInstrumentCount(); i++) {
+            watching.add(context.getInstrument(i));
+        }
+    }
+
+    @Override
+    public void onDetach(StrategyContext context) {
+        for (int i = 0; i < context.getInstrumentCount(); i++) {
+            watching.remove(context.getInstrument(i));
+        }
+    }
+}
+```
+
+`StrategyContext` is immutable. It carries the attachment's `getId()`, `getExchange()` and `getSegment()` (`""` for a venue
+without segments); `getVenueType()` (the enum `VenueType`: `CEX`, `DEX`) and `getType()` (the enum `MarketDataSource`:
+`Ticker`, `KLine`, `FundingRate`), with `getVenueTypeName()` (`"cex"` or `"dex"`) and `getTypeName()` (`"ticker"`,
+`"kline"` or `"funding"`) as the same values in text; `getInstrumentCount()`, `getInstrument(int)` (the symbol),
+`hasInstrument(String)` and `instrumentList()`; `isWarmingUp()`; and `getReason()`, never `null`: `""` on an attach and, on
+a detach, one of `REASON_OWNER`, `REASON_REFUSED`, `REASON_POOL_GONE`, `REASON_CAPACITY` or `REASON_FUNDS` (as text:
+`"OWNER"`, ...). A source dropped for lack of data arrives as `REASON_REFUSED`.
+
+Both methods run on the same thread as `update()`, right before the first market event of the new source (or, for a
+detach, before the first event the run no longer reads), so they see the strategy's state exactly as it was at that point
+and can call anything `update()` can, an `emitBuy`/`emitSell` included. A signal emitted while `isWarmingUp()` is true is
+dropped, like any signal about replayed time. A `RuntimeException` they throw is caught and counted, as in `update()`.
+
+Indicators of a new instrument start empty: a source attached with `warmFrom` replays that many seconds of the feed to the
+strategy before its first live event, as at start, and `isWarmingUp()` tells you it is coming. The strategy's memory
+(fields, a `StateStore`) lasts while the run has at least one source attached; when the last one is detached it is
+released, and the next attach starts clean. A backtest calls `onAttach` once before its first event, with its own source,
+and `onDetach` once after its last, also when it ends before its data does (cancelled, out of time or failed).
+
+`onDetach` runs when a source is detached while the run goes on: by you, or by the platform, with the reason that says
+why. It does **not** run when the run stops or fails: a stop is not a point in the run's data, so nothing a hook emitted
+then could be tied to the events the run had read. To act before a run ends, closing its open positions for instance, send
+it a command ([Receiving commands](#receiving-commands)) and stop the run once the command has been applied.
+
+A QTScript strategy does the same with `onAttach { }` and `onDetach { }` - see
+[QTScript](qtscript.md#attaching-and-detaching-a-source).
+
 ## The pro indicators
 
 The [pro indicators](qtscript.md#the-pro-indicators-uses) come with the Pro and Elite plans. In Java they are the methods of

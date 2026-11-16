@@ -565,3 +565,7 @@ counts them. In a `mix` run the matching signal names the pair and what was held
 {"type": "paper", "kind": "gap", "instrument": {"exchange": "binance", "segment": "spot", "symbol": "ETH/USDT"},
  "data": {"currency": "USDT", "base": 0.05948, "cost": 160.0}, …}
 ```
+
+A source that is [detached](live.md#attaching-and-detaching-a-source) while the run goes on reports a gap the same way: each
+position that was open in one of that source's instruments is a `gap` and is no longer counted, and the run's other
+positions are untouched. In a `mix` run the matching signal is the same, with `"reason": "DETACHED"` in its `data`.

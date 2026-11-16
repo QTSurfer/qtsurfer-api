@@ -7,6 +7,42 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ## [Unreleased]
 
+### Changed
+
+- A live run can read several `dex` pools at once, on the same chain and protocol (attach each as its own source), up to the plan's
+  limit on pools followed at once, which is now also counted when a run is started with a pool. A pool attached to a run that already
+  reads another is read from the moment it takes effect: `warmFrom` above `0` is refused with `400`, and `0` or leaving it out is
+  accepted. A `dex` pool is one address (`0x` and 40 hexadecimal digits, case does not matter) and is kept in lower case.
+- A `dex` pool attached to a run that is already reading is taken away, without failing the run, when the platform cannot follow
+  it: `DETACHED` with the `reason` `REFUSED` or `CAPACITY`, or `SAME_PAIR` when the run already reads another pool of the same pair
+  (the strategy sees the pair, never the pool). The strategy's `onDetach` is told the same reason.
+
+## [0.128.57] — 2026-11-11
+
+### Added
+
+- A live run can start with no market-data source and be given one afterwards. `POST /live/{runId}/attachments` attaches a
+  source (the entry `sources` takes at start, with an optional `warmFrom` and a `ref` that makes a retry safe) and
+  `DELETE /live/{runId}/attachments/{attachmentId}` detaches it; the run's `attachments` list them with their `state`
+  (`ATTACHING`, `ATTACHED`, `DETACHING`, `DETACHED`, `REFUSED`). Several sources can be attached at once, on the same market
+  feed. A run with no source has the new `state` `WAITING`: it holds no place on the platform and reads no data until one is
+  attached. Attaching is limited by your plan (the instruments a run reads across all its sources, the `dex` pools you
+  follow at once), the runs you keep waiting with none are limited by your plan at start, and a run counts toward the live-run limit only while a source is attached.
+  Guide: Live execution ("Attaching and detaching a source").
+- A strategy is told of each attach and detach. A Java strategy overrides `onAttach(StrategyContext)` and
+  `onDetach(StrategyContext)`; a QTScript strategy declares `onAttach { }` and `onDetach { }`, where `$context` gives the
+  attachment. `onDetach` runs for a source detached while the run goes on, not when the run stops or fails; to act before a
+  run ends, send it a command and stop it once the command has been applied. Guides: Coding Java strategies, QTScript.
+- Paper trading: detaching a source reports as gaps the positions open in its instruments. Guide: Paper trading on live runs
+  ("Gaps").
+
+### Changed
+
+- `sources` of `POST /strategy/{strategyId}/live` takes one entry or none (before, exactly one). A run's `sources` lists the
+  sources it is reading, and is empty while it waits.
+- `POST /live/{runId}/commands` answers `409` to a run with no source attached.
+- The sandbox trial counts only the time a source is attached.
+
 ## [0.128.56] — 2026-11-09
 
 ### Changed

@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: QTSurfer API
   summary: QTSurfer backend services API
-  version: 0.128.56
+  version: 0.128.57
   contact:
     name: QTSurfer Support
     email: support@qtsurfer.com
@@ -2855,7 +2855,7 @@ paths:
         Only one run per strategy at a time — starting again while one is already running is `409`;
         stop the current one first.
 
-        `sources` takes exactly one entry today (multi-source strategies are not supported yet).
+        `sources` takes one entry, or none: a start with no `sources` makes a run that waits for a source (see `POST /live/{runId}/attachments`).
         `type` is `ticker` or `kline`; anything else is rejected. Both connect to the lightest
         (fastest) cadence available for the exchange — today that is 1 tick/second on every
         supported exchange; choosing among several cadences is not offered yet.
@@ -2962,7 +2962,7 @@ paths:
                 relay: false
                 startedAtMs: 1758330000000
         '400':
-          description: Malformed `sources` (not exactly one entry, missing field, unsupported `type`), a `venueType`, `exchange` and `segment` that `GET /exchanges` does not list together, or a segment with no live data (the message names what it lists), a `type` the strategy cannot consume (a ticker strategy with a `kline` source, or the reverse; the message names both), an invalid `visibility`, an invalid `paper` block (an unknown field, a wrong type or an out-of-range value), or no `paper` block for a strategy that listens to its own execution events. A `relay` or `stream` that is not `true` or `false`, or a `stream` where streams are not available yet. A `warmFrom` that is not an integer from 0 to 3600. A `sandboxMinutes` that is not an integer from 5 to 1440. An `instruments` that is empty or `null`.
+          description: Malformed `sources` (more than one entry, missing field, unsupported `type`), a `venueType`, `exchange` and `segment` that `GET /exchanges` does not list together, or a segment with no live data (the message names what it lists), a `type` the strategy cannot consume (a ticker strategy with a `kline` source, or the reverse; the message names both), an invalid `visibility`, an invalid `paper` block (an unknown field, a wrong type or an out-of-range value), or no `paper` block for a strategy that listens to its own execution events. A `relay` or `stream` that is not `true` or `false`, or a `stream` where streams are not available yet. A `warmFrom` that is not an integer from 0 to 3600. A `sandboxMinutes` that is not an integer from 5 to 1440. An `instruments` that is empty or `null`.
           content:
             application/json:
               schema:
@@ -3018,7 +3018,8 @@ paths:
         '429':
           description: |
             One of two kinds. **A limit of your plan** is reached: more runs than your concurrent-run limit, more
-            instruments in a list than your plan allows, or a `sandboxMinutes` shorter than the trial your plan gives.
+            instruments in a list than your plan allows, more runs waiting for a source than your plan keeps, or a
+            `sandboxMinutes` shorter than the trial your plan gives.
             The message names your plan, and retrying will not help until something changes, so there is no
             `Retry-After`. Or **the platform is at capacity** right now: a `Retry-After` header says when to try again.
           headers:
@@ -3473,7 +3474,7 @@ paths:
                 $ref: '#/components/schemas/ResponseError'
         '409':
           description: |
-            One of three reasons, each its own message: the run is not running, so there is nothing to tell;
+            One of four reasons, each its own message: the run is not running, so there is nothing to tell; the run has no market-data source attached, so there is nothing to deliver the command to (attach one with `POST /live/{runId}/attachments`);
             this run's compiled strategy has no record of whether it handles commands — register the strategy
             again with `POST /strategy` and start a new run, since a run keeps the compiled version it started
             with; or the strategy does not implement `CommandRequestHandler` at all.
@@ -3489,6 +3490,155 @@ paths:
                 $ref: '#/components/schemas/ResponseError'
         '503':
           description: The command could not be delivered right now, and it was not sent — unlike a parameter update, a command has no fallback path. Try again.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+      security:
+        - bearerAuth: []
+      tags:
+        - Live Execution
+  '/live/{runId}/attachments':
+    post:
+      operationId: attachLiveSource
+      summary: Attach a market-data source to a run
+      description: |
+        Attaches one market-data source to a run, **while it stays live**. A run can start with no `sources` and
+        wait; this is how it is given something to read, and how a run that is already reading something is given
+        another. Owner only.
+
+        `source` is the same entry `sources` takes at start and is checked the same way (see "Sources" in the Live
+        execution guide). `warmFrom` is how many seconds of the feed before the attachment the strategy sees first,
+        `0` to `3600`, for this source only; left out, the same default as at start. `ref` is a string of yours, up to
+        64 characters: sending the same `ref` to the same run answers the attachment it already made instead of
+        making another one, so a retried request or a repeated alert is safe. So does sending a source the run
+        already has attached or being attached, whatever its `ref`.
+
+        Every source attached to a run at the same time is on the same market feed: the same exchange for a `cex`, the
+        same chain for a `dex`.
+
+        The first source of a waiting run starts it. Any other attach takes effect at `effectiveAtMs`, a moment a few
+        seconds ahead that every execution behind the run applies at the same market position. The `202` is the
+        acceptance: read the run's `attachments` for the `state`.
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttachLiveSourceRequest'
+            example:
+              source:
+                venueType: dex
+                exchange: robinhood
+                segment: uniswap-v3
+                type: kline
+                instruments: ['0x3f4e0b2c8e1a4b6d9c0f1a2b3c4d5e6f708192a3']
+              warmFrom: 120
+              ref: alert-8841
+      responses:
+        '202':
+          description: Accepted. If the same `ref` was sent before to this run, or the run already has that source, the attachment it made, unchanged.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveAttachmentAccepted'
+              example:
+                attachmentId: 3p5YyWkq0vH2nJb7LrT9Zc
+                state: ATTACHING
+                effectiveAtMs: 1758330015000
+        '400':
+          description: >-
+            No `source`, a `warmFrom` outside `0` to `3600`, a `ref` longer than 64 characters, or a source a
+            start would refuse, with the same messages (a malformed one, a type the strategy cannot consume, a
+            segment with no live data).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+        '402':
+          description: A wildcard instrument on a plan that does not include it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+        '403':
+          $ref: '#/components/responses/InsufficientScope'
+        '404':
+          description: No such run, or you do not own it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+        '409':
+          description: >-
+            The run is not running, or the source is on another market feed than the ones already attached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+        '422':
+          description: >-
+            An instrument that the strategy's recorded selection leaves out (a QTScript `instruments` line).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+        '429':
+          description: >-
+            A limit of your plan, which the message names with its number: the instruments a run may read (counted
+            over all its attachments) or the `dex` pools you may follow at once across your runs; or the platform
+            has no room.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+      security:
+        - bearerAuth: []
+      tags:
+        - Live Execution
+  '/live/{runId}/attachments/{attachmentId}':
+    delete:
+      operationId: detachLiveSource
+      summary: Detach a market-data source from a run
+      description: |
+        Detaches a source from a run, **while it stays live**. Owner only. It takes effect at the attachment's
+        `effectiveAtMs`, applied at the same market position by every execution behind the run. Positions a paper
+        account had open in that source's instruments are reported as gaps. When the last source is detached the run
+        waits again: the strategy's memory is released and the paper accounts are kept.
+
+        Repeating it on an attachment already detached, or being detached, is not an error.
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: attachmentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Accepted. The attachment is `DETACHING`, or already `DETACHED`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveAttachmentAccepted'
+              example:
+                attachmentId: 3p5YyWkq0vH2nJb7LrT9Zc
+                state: DETACHING
+                effectiveAtMs: 1758330075000
+        '403':
+          $ref: '#/components/responses/InsufficientScope'
+        '404':
+          description: No such run or attachment, or you do not own the run.
           content:
             application/json:
               schema:
@@ -6889,7 +7039,7 @@ components:
     LiveSource:
       type: object
       required: [venueType, exchange, segment, type, instruments]
-      description: One market feed a live run consumes. Exactly one entry per run today.
+      description: One market-data source a live run reads. A run starts with one, or none, and more can be attached afterwards on the same market feed (see `attachments`).
       properties:
         venueType:
           type: string
@@ -6924,7 +7074,7 @@ components:
       type: object
       required: [venueType, exchange, segment, type]
       description: >-
-        One market feed to start a live run on. Exactly one entry per run today. It is `LiveSource` as you ask for it:
+        One market-data source to start a live run on, or to attach to one. It is `LiveSource` as you ask for it:
         the only difference is that `instruments` can be left out.
       properties:
         venueType:
@@ -6962,14 +7112,75 @@ components:
             include the wildcard accept it; the other entries are counted one by one. The instruments the run actually
             reads come back in the run's `sources`. A `dex` source needs exactly one entry, the address of its pool (`0x` and 40
             hexadecimal digits, not case-sensitive): it cannot be left out and `*` is not accepted.
+    AttachLiveSourceRequest:
+      type: object
+      required: [source]
+      additionalProperties: false
+      properties:
+        source:
+          $ref: '#/components/schemas/LiveSourceRequest'
+        warmFrom:
+          type: integer
+          minimum: 0
+          maximum: 3600
+          description: Seconds of the feed before the attachment that the strategy sees first, for this source only. Left out, the same default as at start. See "Warming up" in the Live execution guide.
+        ref:
+          type: string
+          maxLength: 64
+          description: A string of yours. Sending the same `ref` to the same run answers the attachment it already made instead of making another one.
+    LiveAttachmentAccepted:
+      type: object
+      required: [attachmentId, state]
+      properties:
+        attachmentId:
+          type: string
+        state:
+          type: string
+          enum: [ATTACHING, ATTACHED, DETACHING, DETACHED, REFUSED]
+          description: The attachment's state when the request was answered. See `LiveAttachment`.
+        effectiveAtMs:
+          type: integer
+          format: int64
+          description: Epoch milliseconds, the moment every execution behind the run applies the change at the same market position. Absent when the run was waiting and the change is its start.
+    LiveAttachment:
+      type: object
+      required: [attachmentId, source, state, createdAtMs]
+      description: One market-data source attached to a live run.
+      properties:
+        attachmentId:
+          type: string
+        source:
+          $ref: '#/components/schemas/LiveSource'
+        warmFrom:
+          type: integer
+          description: The seconds of warm-up in effect for this source.
+        ref:
+          type: string
+          description: The `ref` it was attached with, when there was one.
+        state:
+          type: string
+          description: '`ATTACHING` (accepted; it takes effect at `effectiveAtMs`), `ATTACHED` (the run is reading it), `DETACHING` (a detach is accepted), `DETACHED` (the run no longer reads it) or `REFUSED` (the platform could not follow it; the run stays as it was). The set may grow: read an unknown value as a source in transition.'
+        reason:
+          type: string
+          description: 'Why it is `DETACHED` or `REFUSED`, when there is something to say: `OWNER` (you detached it), `REFUSED` (the platform refused it), `POOL_GONE` (a `dex` pool stopped being followed), `CAPACITY` (the platform has no room to follow it) or `NO_DATA` (an instrument of a centralized exchange that the platform does not capture sent nothing for five minutes). The set may grow.'
+        message:
+          type: string
+          description: A sentence saying more about a `REFUSED` attachment. Do not parse it.
+        createdAtMs:
+          type: integer
+          format: int64
+        effectiveAtMs:
+          type: integer
+          format: int64
+          description: Epoch milliseconds, when the last change to this attachment takes effect.
     StartLiveRequest:
       type: object
-      required: [sources]
       properties:
         sources:
           type: array
-          minItems: 1
+          minItems: 0
           maxItems: 1
+          description: 'One source to start on, or none (left out, or `[]`): the run then waits, with `state` `WAITING`, until you attach one with `POST /live/{runId}/attachments`.'
           items:
             $ref: '#/components/schemas/LiveSourceRequest'
         params:
@@ -7168,7 +7379,7 @@ components:
           description: 'A new run starts `SANDBOX`, a trial of `sandboxMinutes` minutes at least, and never more than 24 hours, in which it is compared against a second execution and checked for resource use and stability. A run that passes moves to `LIVE` automatically when the trial is over. A run of a strategy that an earlier run of yours already took through the trial starts `LIVE`, unless you started it with `sandbox: true`.'
         state:
           type: string
-          description: 'The run''s health right now: `STARTING` (no runner has reported on it yet), `RUNNING`, `LAGGING` (behind the market data, usually while catching up; clears by itself), `HUNG` (stuck inside one strategy call for longer than allowed; clears when it returns), `DEGRADED` (its independent executions produced different signals), `FAILED` (refused, could not start or failed while running; `reason` says why) or `STOPPED`. `LAGGING`, `HUNG` and `DEGRADED` come and go on a running run. The set may grow: read an unknown value as a running run with something to look at. See the Live execution guide.'
+          description: 'The run''s health right now: `STARTING` (no runner has reported on it yet), `WAITING` (running with no market-data source attached: it holds no place on the platform until you attach one), `RUNNING`, `LAGGING` (behind the market data, usually while catching up; clears by itself), `HUNG` (stuck inside one strategy call for longer than allowed; clears when it returns), `DEGRADED` (its independent executions produced different signals), `FAILED` (refused, could not start or failed while running; `reason` says why) or `STOPPED`. `LAGGING`, `HUNG` and `DEGRADED` come and go on a running run. The set may grow: read an unknown value as a running run with something to look at. See the Live execution guide.'
         desired:
           type: string
           enum: [RUNNING, STOPPED]
@@ -7193,6 +7404,12 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/LiveSource'
+          description: The sources the run is reading, those of its attachments that are `ATTACHING` or `ATTACHED`. Empty while it waits.
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/LiveAttachment'
+          description: The market-data sources attached to the run, with their state. See the "Attaching and detaching a source" section of the Live execution guide.
         params:
           type: object
           additionalProperties: true
@@ -7377,7 +7594,7 @@ components:
           description: 'A new run starts `SANDBOX`, a trial of `sandboxMinutes` minutes at least, and never more than 24 hours, in which it is compared against a second execution and checked for resource use and stability. A run that passes moves to `LIVE` automatically when the trial is over. A run of a strategy that an earlier run of yours already took through the trial starts `LIVE`, unless you started it with `sandbox: true`.'
         state:
           type: string
-          description: 'The run''s health right now: `STARTING` (no runner has reported on it yet), `RUNNING`, `LAGGING` (behind the market data, usually while catching up; clears by itself), `HUNG` (stuck inside one strategy call for longer than allowed; clears when it returns), `DEGRADED` (its independent executions produced different signals), `FAILED` (refused, could not start or failed while running; `reason` says why) or `STOPPED`. `LAGGING`, `HUNG` and `DEGRADED` come and go on a running run. The set may grow: read an unknown value as a running run with something to look at. See the Live execution guide.'
+          description: 'The run''s health right now: `STARTING` (no runner has reported on it yet), `WAITING` (running with no market-data source attached: it holds no place on the platform until you attach one), `RUNNING`, `LAGGING` (behind the market data, usually while catching up; clears by itself), `HUNG` (stuck inside one strategy call for longer than allowed; clears when it returns), `DEGRADED` (its independent executions produced different signals), `FAILED` (refused, could not start or failed while running; `reason` says why) or `STOPPED`. `LAGGING`, `HUNG` and `DEGRADED` come and go on a running run. The set may grow: read an unknown value as a running run with something to look at. See the Live execution guide.'
         desired:
           type: string
           enum: [RUNNING, STOPPED]

@@ -14,6 +14,8 @@ change its parameters without restarting it.
 | `PATCH` | `/live/{runId}` | Change visibility, name, or description |
 | `PUT` | `/live/{runId}/params` | Change parameters while it stays live |
 | `POST` | `/live/{runId}/commands` | Tell it a command while it stays live |
+| `POST` | `/live/{runId}/attachments` | Attach a market-data source to it |
+| `DELETE` | `/live/{runId}/attachments/{attachmentId}` | Detach a source |
 | `GET` | `/live/{runId}/signals` | Read the signals it has already produced |
 | `GET` | `/live/{runId}/paper` | Read its paper trading — see [Paper trading](live_paper.md) |
 | `GET` | `/live/{runId}/paper/equity` | Read one paper account's equity curve, in the shape of every [equity curve](equity_curves.md) — see [Paper trading](live_paper.md) |
@@ -84,6 +86,7 @@ What you can watch while it waits, on `GET`/`PATCH` `.../live`:
 | `state` | What it means |
 |---|---|
 | `STARTING` | Accepted; no runner has reported on it yet. |
+| `WAITING` | Running with no market-data source attached: it holds no place on the platform and reads no data until you [attach one](#attaching-and-detaching-a-source). |
 | `RUNNING` | Running normally. |
 | `LAGGING` | Running, but behind the market data: usual while it catches up after starting or after a platform restart. It clears by itself. |
 | `HUNG` | Your strategy is stuck inside one call for longer than the platform allows. It clears when that call returns. |
@@ -180,7 +183,7 @@ Three things to know:
 
 ## Sources
 
-`sources` takes exactly one entry (multi-source strategies are not supported yet):
+`sources` takes one entry, or none: a start with no `sources` (left out, or `[]`) makes a run that waits, and you [attach a source](#attaching-and-detaching-a-source) when you want one. More sources, on the same market feed, are attached afterwards. One entry:
 
 ```json
 {
@@ -305,6 +308,113 @@ address, more than one, or a `ticker` type. A kline strategy is required, as for
 starting a ticker strategy on a `dex` source is refused with `400`. A start that leaves `instruments` out, or
 sends `["*"]`, is refused with `402` on a plan without the wildcard; on any other the run fails as above.
 
+#### Several pools in one run
+
+A run can read several pools at once: attach each one as its own source (see [Attaching and detaching a
+source](#attaching-and-detaching-a-source)). They have to be on the same chain and the same protocol, and your plan limits
+how many pools you can follow at once across your runs (`429`, with the number). Two things are different from a start:
+
+- **A pool attached to a run that is already reading another is read from the moment it takes effect.** It has no history:
+  send `warmFrom: 0` or leave it out, since any other value is a `400`. Its first signal arrives about 25 seconds after the
+  request in our measurements: the attach takes effect 15 seconds ahead, and then come the wait for late trades (up to
+  about three seconds) and the second of the candle itself. Only the first source of a waiting run, which starts the run,
+  takes `warmFrom` as a start does.
+- **One pool per pair.** The strategy sees the pair (`WETH/USDG`), never the pool, so it could not tell two pools of the same
+  pair apart, and a pair usually has several (one per fee tier). The first pool to give a candle of the pair keeps it. A pool of
+  the same pair attached afterwards is taken away: it becomes `DETACHED` with the `reason` `SAME_PAIR`, usually within
+  half a minute of taking effect, and none of its candles reaches the strategy. Attach it to another run, or detach the first
+  pool.
+
+## Attaching and detaching a source
+
+A run does not have to start on a market feed. Start it with no `sources` and it **waits** (`state: WAITING`): it
+exists, keeps its [stream URL](#a-plain-websocket-stream-of-a-run), its channel and its paper accounts, reads no market
+data and holds no place on the platform. When an alert tells you which instrument matters, **attach** it; when you are
+done, **detach** it and attach another. A run started with an entry in `sources` is the same thing with its first
+source attached for you.
+
+`POST /live/{runId}/attachments` takes one source and answers `202`:
+
+```json
+{
+  "source": {"venueType": "dex", "exchange": "robinhood", "segment": "uniswap-v3", "type": "kline",
+             "instruments": ["0x3f4e0b2c8e1a4b6d9c0f1a2b3c4d5e6f708192a3"]},
+  "warmFrom": 120,
+  "ref": "alert-8841"
+}
+```
+
+```json
+{"attachmentId": "3p5YyWkq0vH2nJb7LrT9Zc", "state": "ATTACHING", "effectiveAtMs": 1758330015000}
+```
+
+| Field | Meaning |
+|---|---|
+| `source` | Required. The same entry `sources` takes at start, checked the same way: exchange, segment and type, and its instruments (a `dex` source is exactly one pool). See [Sources](#sources). |
+| `warmFrom` | Optional. How many seconds of the feed before the attachment the strategy sees first, `0` to `3600`, as [at start](#warming-up-warmfrom) but for this source only. Left out, the same default as at start. A `dex` pool attached to a run that already reads another is read from now on: `0`, or left out, are the only values it takes (see [Several pools in one run](#several-pools-in-one-run)). |
+| `ref` | Optional. A string of yours, up to 64 characters. Sending the same `ref` to the same run answers the attachment it already made instead of making another one, so a retried request, or an alert that arrives twice, is safe. Sending a source the run already has attached, or is attaching, answers that attachment too, whatever its `ref`. |
+
+**Every source attached to a run at the same time is on the same market feed**: the same exchange for a `cex`, the same
+chain and protocol for a `dex`. A source on another feed is refused with `409` until the others are detached. A waiting run takes any.
+
+**When it happens.** The first source of a waiting run starts it, the way a start does. Any other attach, and every
+detach, takes effect at `effectiveAtMs`, a moment a few seconds ahead that every execution behind the run applies at the
+same market position, so they stay identical to each other, as with a [command](#commands). The `202` is the
+acceptance; `state` says when it has happened.
+
+### Reading the attachments
+
+`attachments` is a list on the run, in `GET /strategy/{strategyId}/live` and `GET /live/{runId}`: for each one its
+`attachmentId`, the `source` as the platform holds it, `warmFrom`, your `ref`, `state`, `reason` and `message` when
+there is something to say, `createdAtMs` and `effectiveAtMs`. The run's `sources` are the sources of its attachments that
+are `ATTACHING` or `ATTACHED`, and empty while it waits.
+
+| `state` | What it means |
+|---|---|
+| `ATTACHING` | Accepted; it takes effect at `effectiveAtMs`. |
+| `ATTACHED` | The run is reading it. |
+| `DETACHING` | A detach is accepted; it takes effect at its `effectiveAtMs`. |
+| `DETACHED` | The run no longer reads it. `reason` says why when it was not you. |
+| `REFUSED` | The platform could not follow it. `reason` and `message` say why. The run stays as it was. |
+
+`reason` is a string that may gain values: `OWNER` (you detached it), `REFUSED` (the platform refused it), `POOL_GONE` (a
+`dex` pool stopped being followed), `CAPACITY` (the platform has no room to follow it), `SAME_PAIR` (a `dex` pool of a pair the run
+already reads through another pool) and `NO_DATA` (the instrument,
+of a centralized exchange, sent nothing for five minutes: it may be one that the platform does not capture). A run started with a `dex`
+source that the platform will not follow fails as it always has (see [Why a run failed or
+stopped](#why-a-run-failed-or-stopped)), and so does one whose first source, attached while it waited, is such a pool. A pool
+attached to a run that is already reading is taken away instead, without failing the run: it ends `DETACHED` with the
+`reason` `REFUSED` (it is not a pool of that protocol on that chain) or `CAPACITY` (the platform has no room to follow it),
+usually within half a minute of the attach taking effect, and the strategy's `onDetach` is told the same reason.
+
+### Detaching
+
+`DELETE /live/{runId}/attachments/{attachmentId}` answers `202` with the attachment in `DETACHING`; repeating it is not
+an error. On a run that has stopped there is nothing to tell, and the attachment goes straight to `DETACHED`. Positions that a [paper account](live_paper.md#gaps) had open in that source's instruments are reported as
+gaps. When the last source is detached the run waits again: the strategy's memory is released, so the next attach
+starts it clean, and the paper accounts are kept.
+
+### What can refuse an attach
+
+| Status | When |
+|---|---|
+| `400` | The body: no `source`, a `warmFrom` outside `0` to `3600`, a `ref` longer than 64 characters; or a source a start would refuse, with the same messages (a malformed one, a pool that is not one address, a type the strategy cannot consume, a segment with no live data); or a `warmFrom` above `0` for a `dex` pool attached to a run that already reads another. |
+| `402` | A wildcard instrument on a plan that does not include it. |
+| `404` | No such run, or it is not yours; on a detach, no such attachment. |
+| `409` | The run is not running, or the source is on another market feed than the ones already attached. |
+| `422` | An instrument that the strategy's recorded selection leaves out (a QTScript `instruments` line). |
+| `429` | A limit of your plan, which the message names with its number: the instruments a run may read (the same limit as at start, counted over all its attachments), the `dex` pools you may follow at once across your runs (also counted when a run is started with a pool); or the platform has no room. |
+
+A run counts toward your live-run limit only while it has a source attached. The runs you keep waiting, with none, are
+limited too, by your plan; the limit applies when you start such a run, and a start past it is refused with `429`.
+
+The sandbox accepts attachments too. Its trial counts only the time with a source attached: a waiting run does not advance
+it (see [How long the sandbox lasts](#how-long-the-sandbox-lasts-sandboxminutes)). A [command](#commands) sent to a run
+with no source attached is refused with `409`: there is nothing to deliver it to.
+
+The strategy is told of each attach and detach, see [QTScript](qtscript.md#attaching-and-detaching-a-source) and
+[Coding Java strategies](strategy_coding.md#attaching-and-detaching-a-source).
+
 ## Warming up: `warmFrom`
 
 A strategy that reads an average, a window or any other indicator needs some history before its values
@@ -349,7 +459,7 @@ replay from. Set it in the body of `POST /strategy/{strategyId}/live`, next to `
 
 Every run starts with a trial in the `sandbox` stage (see [Lifecycle](#lifecycle-sandbox-then-live)). How long it lasts depends on
 your plan: each plan has a **shortest trial**, anything from an hour to a full day, and the longest any run has is **24 hours**.
-A run that asks for nothing gets the shortest trial its plan gives.
+A run that asks for nothing gets the shortest trial its plan gives. The trial counts only the time the run has a source attached (see [Attaching and detaching a source](#attaching-and-detaching-a-source)): a run that waits does not advance it.
 
 `sandboxMinutes` is how you ask for a longer one. Set it in the body of `POST /strategy/{strategyId}/live`, next to `sources`:
 
@@ -474,7 +584,7 @@ never reaches it — a peer that was already running when it arrived applies it,
 Anything the strategy needs to remember across a restart belongs in a parameter (`PUT /live/{runId}/params`), which
 does have a stored value.
 
-A `409` means one of three things, each its own message: the run is not running; this run's compiled strategy has
+A `409` means one of four things, each its own message: the run is not running; the run has no market-data source attached, so there is nothing to deliver the command to (see [Attaching and detaching a source](#attaching-and-detaching-a-source)); this run's compiled strategy has
 no record of whether it handles commands (register the strategy again and start a new run, same as the `409` on
 `params`); or the strategy does not implement `CommandRequestHandler` at all. A `503` means the command could not be
 delivered right now and was **not** sent — there is no fallback path for an event the way there is for a parameter
