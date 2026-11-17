@@ -11,6 +11,10 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 - `GET /account` returns `maxCexImportRangeHours`, the longest time range, in hours, of one import of a centralized exchange's history (`POST /datasets/imports` with `type: "cex"`). It is counted apart from `maxImportRangeHours`, which now speaks of a decentralized exchange's pool alone, so that a plan's range of history can reach weeks while a pool's stays small. A `cex` import over the plan's range is `400`.
 - `GET /account` returns `maxConcurrentImports`, the number of dataset imports (`POST /datasets/imports`, of an exchange's history or of a pool) an account may have in flight at once, queued or running. A new import over it is refused with `429` until one has finished; an import frees its place when it is ready or has failed, without the client having to poll it. The `429` of `POST /datasets/imports` now also covers it.
+- `reason`, the token that names the cause of an error, is now also returned for the causes that apply to any operation:
+  `STRATEGY_OUTDATED` (`409`, a strategy compiled for an earlier version of the platform), `PLAN_REQUIRED` (`402`), `PLAN_LIMIT`
+  (`429` without `Retry-After`), `INVALID_VALUE`, `INVALID_BODY` and `WRONG_FIELD_TYPE` (`400`) and `INTERNAL_ERROR` (`500`).
+  Errors with other causes carry no `reason`, as before.
 
 ### Changed
 

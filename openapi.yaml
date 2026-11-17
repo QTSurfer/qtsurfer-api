@@ -1419,6 +1419,7 @@ paths:
               example:
                 code: 409
                 message: The strategy was compiled for an earlier version of the platform and no longer works with the current one. Register it again to start a new run.
+                reason: STRATEGY_OUTDATED
         '402':
           description: |
             The strategy uses the pro indicators and your plan does not include them: the message names the first
@@ -1928,6 +1929,7 @@ paths:
               example:
                 code: 409
                 message: The strategy was compiled for an earlier version of the platform and no longer works with the current one. Register it again to start a new run.
+                reason: STRATEGY_OUTDATED
         '400':
           description: |
             Invalid request or parameters. Also returned for a `type` that cannot be executed yet
@@ -2999,6 +3001,7 @@ paths:
                   value:
                     code: 409
                     message: The strategy was compiled for an earlier version of the platform and no longer works with the current one. Register it again to start a new run.
+                    reason: STRATEGY_OUTDATED
         '402':
           description: |
             Your plan does not include what the request asks for. The message says which, in one of these
@@ -4298,6 +4301,18 @@ components:
             A stable token naming the cause, for a client to branch on without reading `message`.
             Present only on an error that has one, and each operation that can return one lists
             the values it uses. A client treats a value it does not know like an absent `reason`.
+
+            Besides the values an operation lists, these can come with any operation:
+
+            | `reason` | Status | When |
+            |---|---|---|
+            | `STRATEGY_OUTDATED` | `409` | The strategy was compiled for an earlier version of the platform: register it again. |
+            | `PLAN_REQUIRED` | `402` | Your plan does not include what the request asks for. |
+            | `PLAN_LIMIT` | `429` | You reached a limit of your own plan (no `Retry-After`: waiting does not help). |
+            | `INVALID_VALUE` | `400` | A number, a date or a name of the request could not be read. |
+            | `INVALID_BODY` | `400` | The request body is not JSON. |
+            | `WRONG_FIELD_TYPE` | `400` | A field of the body has a value of the wrong type. |
+            | `INTERNAL_ERROR` | `500` | A failure on our side; quote the reference in `message` when you ask for help. |
           type: string
           example: OUTSIDE_WINDOW
         retryable:
