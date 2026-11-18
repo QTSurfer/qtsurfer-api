@@ -15,6 +15,9 @@ pre-1.0, its version follows the version in `openapi.yaml`.
   `STRATEGY_OUTDATED` (`409`, a strategy compiled for an earlier version of the platform), `PLAN_REQUIRED` (`402`), `PLAN_LIMIT`
   (`429` without `Retry-After`), `INVALID_VALUE`, `INVALID_BODY` and `WRONG_FIELD_TYPE` (`400`) and `INTERNAL_ERROR` (`500`).
   Errors with other causes carry no `reason`, as before.
+- An import of an exchange's history (`POST /datasets/imports` with `type: cex`) can be held by the size of the file instead of by hours: the API estimates the bars the range holds at its `cadence` and refuses, with `400` and `reason: IMPORT_TOO_LARGE`, a range whose file would be over your tier's `maxDatasetBytes`, saying how many days that cadence reaches; `reason: IMPORT_OUTSIDE_HISTORY` for a `from` earlier than your tier's history, and `reason: IMPORT_TOO_FEW_BARS` for a range of fewer than two bars.
+- `GET /account` returns `maxCexHistoryDays`, how far back an exchange import may start, and `maxCexImportInstrumentsPerMonth`, how many different instruments of one market an account may import per calendar month (UTC). Over the latter an import is `429` with `reason: IMPORT_MONTHLY_QUOTA` and no `Retry-After`; importing the same instrument again in the month costs nothing and a failed import gives its place back.
+- `GET /account/usage` returns `cexImportMonth` and `cexImportInstruments`, the instruments imported this month per market.
 
 ### Changed
 

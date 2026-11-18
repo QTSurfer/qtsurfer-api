@@ -2597,7 +2597,28 @@ paths:
         picks tickers or klines and is also the resulting dataset's `type`. The range of a `cex`
         import is capped by your tier's `maxCexImportRangeHours` of `GET /account`, in hours and
         counted apart from a pool's (`maxImportRangeHours`): the history is already kept by the
-        platform, so it reaches weeks on the larger plans.
+        platform, so it reaches weeks on the larger plans. On the plans that have no such cap
+        (`maxCexImportRangeHours` is the largest whole number) the range is held by three other
+        limits, all refused with `400` before anything is queued:
+
+        * **The size of the file.** The API estimates the bars the range holds at its `cadence`
+          (a request with no `cadence` is judged at `1s`, the finest there is) and the size of the
+          file they make, and refuses a range over your tier's `maxDatasetBytes`. The message says
+          how many days that cadence reaches on your plan, so a coarser cadence is what takes a
+          longer range: on a 500 MiB file, `1s` candles reach about a hundred days and `1m`
+          candles cover every year of an exchange's history. `reason: IMPORT_TOO_LARGE`.
+        * **How far back it starts.** `from` cannot be earlier than your tier's
+          `maxCexHistoryDays` days before now. `reason: IMPORT_OUTSIDE_HISTORY`.
+        * **At least two bars.** A range shorter than two bars of its `cadence` is refused instead
+          of being queued to fail. `reason: IMPORT_TOO_FEW_BARS`.
+
+        **Instruments per month.** Your tier's `maxCexImportInstrumentsPerMonth` is how many
+        different instruments of one market (an exchange and its segment) you can import in a
+        calendar month (UTC). Importing an instrument again in the same month costs nothing. An
+        import that fails for good gives its place back. Over it the import is a `429` with
+        `reason: IMPORT_MONTHLY_QUOTA` and no `Retry-After`: the message says when it renews.
+        `GET /account/usage` shows what you have used. A tier with no such limit has
+        `maxCexImportInstrumentsPerMonth` at the largest whole number.
 
         **An import is held to your plan's cadences,** the same ones as the preparation of an
         exchange's data (the "Cadences by plan" section of the Backtests guide). A `cadence` your plan does not include is `402`; a
@@ -2768,6 +2789,11 @@ paths:
             (`GET /account`'s `maxTotalStorageBytes`) is already reached, or you already have as
             many imports in flight as your tier allows (`maxConcurrentImports`). Delete a dataset
             to free a slot or space, wait for an import to finish, or upgrade.
+
+            A `cex` import that would be one instrument more than your tier's
+            `maxCexImportInstrumentsPerMonth` for that market this month is `429` too, with
+            `reason: IMPORT_MONTHLY_QUOTA` and no `Retry-After`: the message says the day the
+            quota renews.
           content:
             application/json:
               schema:
@@ -4698,6 +4724,14 @@ components:
           type: integer
           description: "Maximum number of dataset imports your account may have in flight at once, queued or running, whether of an exchange's history or of a pool. A new import over it is refused with `429` until one has finished."
           example: 1
+        maxCexHistoryDays:
+          type: integer
+          description: "How far back from now, in days, an import of a centralized exchange's history (`type: cex`) may start. The largest whole number means as far back as the platform keeps. Absent on a platform that has not adopted it."
+          example: 730
+        maxCexImportInstrumentsPerMonth:
+          type: integer
+          description: "How many different instruments of one market (an exchange and its segment) your account may import from an exchange's history in a calendar month (UTC). Importing the same instrument again in the month costs nothing. The largest whole number means no limit. Absent on a platform that has not adopted it."
+          example: 20
         maxDatasets:
           type: integer
           description: Maximum number of active datasets your tier allows.
@@ -4783,6 +4817,26 @@ components:
             `datasetBytesUsed + signalBytesUsed + strategyBytesUsed` — the number checked
             against `GET /account`'s `maxTotalStorageBytes`.
           example: 16293888
+        cexImportMonth:
+          type: string
+          description: "The calendar month (UTC, `YYYY-MM`) `cexImportInstruments` counts. Absent on a platform that has not adopted the monthly limit."
+          example: "2026-11"
+        cexImportInstruments:
+          type: array
+          description: "The instruments of an exchange's history you have imported this month, counted per market against `GET /account`'s `maxCexImportInstrumentsPerMonth`. A market with none is not listed."
+          items:
+            type: object
+            required: [exchange, segment, used]
+            properties:
+              exchange:
+                type: string
+                example: binance
+              segment:
+                type: string
+                example: spot
+              used:
+                type: integer
+                example: 3
         _links:
           $ref: '#/components/schemas/AccountUsageLinks'
     AccountUsageLinks:
