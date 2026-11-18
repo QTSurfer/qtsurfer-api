@@ -2739,7 +2739,8 @@ paths:
         '400':
           description: |
             Invalid request; `instrument` isn't a plain spot pair; `from >= to`; `cadence` present
-            but not one of its supported values; a candle import whose `from` is earlier than the
+            but not one of its supported values; `meta` is not an object of text, carries a key of
+            the platform's or outside `pool.*`/`user.*`, or is over one of its limits; a candle import whose `from` is earlier than the
             history candles reach back; the requested range exceeds your tier's import
             range ceiling; the requested range's rough size estimate exceeds your tier's row limit;
             `dex.network`/`dex.id` not one of their supported values; `dex.contract`/`dex.factory`
@@ -6526,6 +6527,30 @@ components:
           format: date-time
           description: When the dataset was created.
           example: "2026-08-20T09:00:00Z"
+        meta:
+          type: object
+          description: |
+            How the dataset came to be: a flat map of text to text, written once when the dataset
+            is created and never changed afterwards. Always present, `{}` when nothing was recorded
+            (an upload, or a dataset created before this field existed). It is information for
+            whoever looks at the dataset, not something the API decides anything from.
+
+            An import records what it was asked for, under keys that begin with `import.`
+            (`import.type`, `import.cadence`, `import.from`, `import.to`, the range requested),
+            `dex.` (`dex.network`, `dex.contract`, `dex.id`, `dex.version`, `dex.factory`) or `cex.`
+            (`cex.exchange`, `cex.segment`, `cex.data_type`). A key with no value is left out. The
+            keys the caller sent with the import (`pool.*`, `user.*`, see `DatasetImportRequest`)
+            come back beside them.
+          additionalProperties:
+            type: string
+          example:
+            import.type: "dex"
+            import.cadence: "1s"
+            import.from: "2026-11-16T00:25:02Z"
+            import.to: "2026-11-16T10:30:00Z"
+            dex.network: "solana"
+            dex.contract: "6nwmQSgHWtRfXw9xqQM3hseyKzWrQq2gzamoSbjKqs32"
+            pool.name: "FiveM / SOL"
         currentVersionId:
           type: string
           description: |
@@ -6880,6 +6905,26 @@ components:
           $ref: '#/components/schemas/DatasetImportDexRequest'
         cex:
           $ref: '#/components/schemas/DatasetImportCexRequest'
+        meta:
+          type: object
+          description: |
+            Optional. Keys of your own to keep on the dataset, returned as `meta` of the `Dataset`
+            beside the ones the import records itself. Two namespaces are yours: `pool.*`, a note
+            about the pool the import is for (by convention `pool.id`, `pool.name`, `pool.dex`,
+            `pool.reserve_usd`, `pool.created_at`), and `user.*`, any label you like. A key of the
+            platform's (`import.*`, `dex.*`, `cex.*`) or of any other namespace is `400`.
+
+            A key is lower-case letters, digits and `_`, in parts separated by `.`, at most 64
+            characters. A value is a non-empty text of at most 256 characters with no control
+            characters. At most 16 keys, and the whole of what is kept (your keys and the ones the
+            import adds) at most 32 keys and 4096 bytes of JSON. Anything over a limit is `400`; the
+            import is not created. `meta` is not taken by `POST /datasets`.
+          additionalProperties:
+            type: string
+          example:
+            pool.name: "FiveM / SOL"
+            pool.dex: "PumpSwap"
+            user.label: "week one"
     DatasetImportDexRequest:
       type: object
       description: |

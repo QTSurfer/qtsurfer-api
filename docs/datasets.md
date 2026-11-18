@@ -545,11 +545,49 @@ don't need a second call to see what a dataset covers.
 | `from`, `to`, `cadence`, `timestampUnit` | the current version's own range/cadence/timestamp unit (a fixed grid or `rt` cadence, `iso`\|`s`\|`ms`\|`us` for `timestampUnit`, see [`DatasetVersion`](#datasetversion--one-successfully-ingested-upload)), as discovered at ingest. **Absent until a version exists** |
 | `bytes`, `rows`, `gaps`, `largestGapSteps` | the current version's own stored size, row count, gap count and largest gap (in steps of its cadence). **Present only when `status` is `ready`** — see [`DatasetVersion`](#datasetversion--one-successfully-ingested-upload) for what `bytes` measures |
 | `error` | why the most recent attempt failed. **Present only when `status` is `failed`** |
+| `meta` | how the dataset came to be, a flat map of text to text (see [`meta`](#meta--how-a-dataset-came-to-be)). **Always present**, `{}` when nothing was recorded |
 
 `GET /datasets/{datasetId}` alone adds `dataUrl`/`dataFormat` (same meaning as on
 [`DatasetVersion`](#datasetversion--one-successfully-ingested-upload)) once the current version is
 `ready`, plus `_links.self`. The bulk listing never mints these — a presigned download URL for
 every dataset on a screen that renders no chart isn't worth the exposure.
+
+### `meta` — how a dataset came to be
+
+An import writes down what it was asked for on the dataset itself, once, when the dataset is created.
+It is returned by `GET /datasets` and `GET /datasets/{datasetId}` as `meta`, a flat object whose keys
+and values are text; it is information for whoever looks at the dataset and is never used to decide
+anything. A dataset that was uploaded, or created before this existed, has `{}`.
+
+```json
+{
+  "import.type": "dex",
+  "import.cadence": "1s",
+  "import.from": "2026-11-16T00:25:02Z",
+  "import.to": "2026-11-16T10:30:00Z",
+  "dex.network": "solana",
+  "dex.contract": "6nwmQSgHWtRfXw9xqQM3hseyKzWrQq2gzamoSbjKqs32",
+  "pool.name": "FiveM / SOL"
+}
+```
+
+| Keys | Set by | Holds |
+|---|---|---|
+| `import.type`, `import.cadence`, `import.from`, `import.to` | the platform | the kind of import (`dex` or `cex`), its cadence when it has one, and the range **requested** (the data the source holds can be less) |
+| `dex.network`, `dex.contract`, `dex.id`, `dex.version`, `dex.factory` | the platform | what a `dex` import named; a key the import did not use (a candle import ignores `id`, `version` and `factory`) is left out |
+| `cex.exchange`, `cex.segment`, `cex.data_type` | the platform | what a `cex` import named |
+| `pool.*`, `user.*` | you | what you send as `meta` in [`POST /datasets/imports`](#importing-a-dataset-instead-of-uploading-one) |
+
+You may send `meta` with an import to keep a note of your own on the dataset. Only two namespaces are
+yours: `pool.*` (a note about the pool; by convention `pool.id`, `pool.name`, `pool.dex`,
+`pool.reserve_usd` and `pool.created_at`) and `user.*` (any label). A key that begins with
+`import.`, `dex.` or `cex.`, or with anything other than `pool.` or `user.`, is `400`.
+
+A key is lower-case letters, digits and `_`, in parts separated by `.`, up to 64 characters. A value is
+a non-empty text of up to 256 characters with no control characters. You can send up to 16 keys, and
+the whole of what is kept, yours and the platform's, is limited to 32 keys and 4096 bytes of JSON.
+Anything over a limit is `400` and nothing is created. `POST /datasets` (an upload) does not take
+`meta`: it answers `400` rather than drop it. There is no way to change `meta` afterwards.
 
 ## Listing your datasets
 
