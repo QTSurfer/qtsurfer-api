@@ -2790,6 +2790,13 @@ paths:
             many imports in flight as your tier allows (`maxConcurrentImports`). Delete a dataset
             to free a slot or space, wait for an import to finish, or upgrade.
 
+            The refusal for the imports in flight is the one that clears by itself, when one of
+            your imports ends: it is `reason: IMPORT_CONCURRENT_LIMIT`, `retryable: true` and it
+            carries a `Retry-After`. The others are limits of your plan that waiting does not fix:
+            they are `retryable: false` and carry no `Retry-After`. The dataset count and the
+            storage are `reason: PLAN_LIMIT`; the instruments of the month are
+            `reason: IMPORT_MONTHLY_QUOTA`.
+
             A `cex` import that would be one instrument more than your tier's
             `maxCexImportInstrumentsPerMonth` for that market this month is `429` too, with
             `reason: IMPORT_MONTHLY_QUOTA` and no `Retry-After`: the message says the day the
