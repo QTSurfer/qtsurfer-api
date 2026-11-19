@@ -398,7 +398,7 @@ starts it clean, and the paper accounts are kept.
 
 | Status | When |
 |---|---|
-| `400` | The body: no `source`, a `warmFrom` outside `0` to `3600`, a `ref` longer than 64 characters; or a source a start would refuse, with the same messages (a malformed one, a pool that is not one address, a type the strategy cannot consume, a segment with no live data); or a `warmFrom` above `0` for a `dex` pool attached to a run that already reads another. |
+| `400` | The body: no `source`, a `warmFrom` outside `0` to `3600`, a `ref` longer than 64 characters; or a source a start would refuse, with the same messages (a malformed one, a pool that is not one address, a type the strategy cannot consume, a segment with no live data); or a `warmFrom` above `0` for a `dex` pool attached to a run that already reads another; or a wildcard instrument (`*`, or a pair with a `*` on one side) on a run started with `paper.accounts: instrument`, on every plan (that run opens one account for each instrument it reads, so they have to be named: attach one at a time, or a list). |
 | `402` | A wildcard instrument on a plan that does not include it. |
 | `404` | No such run, or it is not yours; on a detach, no such attachment. |
 | `409` | The run is not running, or the source is on another market feed than the ones already attached. |
@@ -406,7 +406,8 @@ starts it clean, and the paper accounts are kept.
 | `429` | A limit of your plan, which the message names with its number: the instruments a run may read (the same limit as at start, counted over all its attachments), the `dex` pools you may follow at once across your runs (also counted when a run is started with a pool); or the platform has no room. |
 
 A run counts toward your live-run limit only while it has a source attached. The runs you keep waiting, with none, are
-limited too, by your plan; the limit applies when you start such a run, and a start past it is refused with `429`.
+limited too, by your plan; the limit applies when you start such a run, and a start past it is refused with `429` and
+`reason: WAITING_RUNS_LIMIT`, with no `Retry-After`: stop one of them or give one a source.
 
 The sandbox accepts attachments too. Its trial counts only the time with a source attached: a waiting run does not advance
 it (see [How long the sandbox lasts](#how-long-the-sandbox-lasts-sandboxminutes)). A [command](#commands) sent to a run
@@ -565,6 +566,18 @@ PUT /live/6TzAPiPpsOWwBLdLBZCxwH/params
 
 200
 {"runId": "6TzAPiPpsOWwBLdLBZCxwH", "paramsVersion": 2, "effectiveAtMs": 1758330015000}
+```
+
+A run that reads no source (`state: WAITING`) is not running anywhere, so there is no moment to apply the change at. The
+new values are kept for the run and it starts with them when its first source is attached; the answer has no
+`effectiveAtMs`:
+
+```
+PUT /live/6TzAPiPpsOWwBLdLBZCxwH/params
+{"params": {"emaFastPeriod": "12"}}
+
+200
+{"runId": "6TzAPiPpsOWwBLdLBZCxwH", "paramsVersion": 2}
 ```
 
 ## Commands

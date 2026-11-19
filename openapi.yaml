@@ -3061,7 +3061,9 @@ paths:
             instruments in a list than your plan allows, more runs waiting for a source than your plan keeps, or a
             `sandboxMinutes` shorter than the trial your plan gives.
             The message names your plan, and retrying will not help until something changes, so there is no
-            `Retry-After`. Or **the platform is at capacity** right now: a `Retry-After` header says when to try again.
+            `Retry-After`. The limit of runs left waiting for a source is `reason: WAITING_RUNS_LIMIT`; the other
+            limits of your plan are `reason: PLAN_LIMIT`. Or **the platform is at capacity** right now: a
+            `Retry-After` header says when to try again.
           headers:
             Retry-After:
               schema:
@@ -3401,6 +3403,10 @@ paths:
         earliest moment it is guaranteed to apply, a few seconds out, so both the REST and
         WebSocket paths to this same update (see the "Live execution" guide) land on the exact same
         value at the exact same moment.
+
+        A run that reads no source (`state: WAITING`) is not running anywhere, so there is no moment to apply
+        the change at: the new values are kept for the run and it starts with them when its first source is
+        attached. The answer has no `effectiveAtMs`.
       parameters:
         - name: runId
           in: path
@@ -3596,7 +3602,9 @@ paths:
           description: >-
             No `source`, a `warmFrom` outside `0` to `3600`, a `ref` longer than 64 characters, or a source a
             start would refuse, with the same messages (a malformed one, a type the strategy cannot consume, a
-            segment with no live data).
+            segment with no live data). On a run started with `paper.accounts: instrument`, a wildcard instrument
+            (`*`, or a pair with a `*` on one side) is refused on every plan, as at start: name the instruments,
+            one per attachment or a list.
           content:
             application/json:
               schema:
@@ -7451,7 +7459,8 @@ components:
             per instrument, each a simulation of that instrument alone with its own
             `initialFunding`, which is what makes it comparable with a backtest of the instrument
             but less realistic, since a venue has one wallet per asset and not one per pair. It
-            needs the instruments of the run named: a wildcard is refused, on every plan.
+            needs the instruments of the run named: a wildcard is refused, on every plan, at start and
+            in every source attached afterwards.
     UpdateLiveRequest:
       type: object
       properties:
@@ -8192,7 +8201,7 @@ components:
           format: int64
     LiveParamsUpdateResult:
       type: object
-      required: [runId, paramsVersion, effectiveAtMs]
+      required: [runId, paramsVersion]
       properties:
         runId:
           type: string
@@ -8201,7 +8210,10 @@ components:
         effectiveAtMs:
           type: integer
           format: int64
-          description: Epoch milliseconds — the earliest moment the new values are guaranteed to be in effect.
+          description: >-
+            Epoch milliseconds — the earliest moment the new values are guaranteed to be in effect. Absent when the
+            run reads no source (`state: WAITING`): it applies nothing at a moment, and starts with the new values
+            when its first source is attached.
     LiveCommandResult:
       type: object
       required: [runId, commandId, effectiveAtMs]

@@ -20,6 +20,7 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 - `GET /account` returns `maxCexHistoryDays`, how far back an exchange import may start, and `maxCexImportInstrumentsPerMonth`, how many different instruments of one market an account may import per calendar month (UTC). Over the latter an import is `429` with `reason: IMPORT_MONTHLY_QUOTA` and no `Retry-After`; importing the same instrument again in the month costs nothing and a failed import gives its place back.
 - `GET /account/usage` returns `cexImportMonth` and `cexImportInstruments`, the instruments imported this month per market.
 - The `429` of `POST /datasets/imports` for an account that already has as many imports in flight as its tier allows (`maxConcurrentImports`) carries `reason: IMPORT_CONCURRENT_LIMIT`. It stays `retryable: true` with its `Retry-After`, because it clears by itself when one of the account's imports ends; the other refusals of that endpoint are limits of the plan and are `retryable: false` with no `Retry-After`: the dataset count and the storage are `reason: PLAN_LIMIT` (they used to be sent as retryable, with a `Retry-After` and no `reason`), and the instruments of the month are `IMPORT_MONTHLY_QUOTA`. The dataset count of `POST /datasets` is `reason: PLAN_LIMIT` too.
+- The `429` of starting a run with no `sources` when the plan's limit of runs left waiting for a source is reached carries `reason: WAITING_RUNS_LIMIT`, with no `Retry-After` (waiting does not fix it: stop one of them, give one a source, or change plan). The other limits of the plan on starting a live run keep `reason: PLAN_LIMIT`.
 
 ### Changed
 
@@ -30,6 +31,8 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 - A `dex` pool attached to a run that is already reading is taken away, without failing the run, when the platform cannot follow
   it: `DETACHED` with the `reason` `REFUSED` or `CAPACITY`, or `SAME_PAIR` when the run already reads another pool of the same pair
   (the strategy sees the pair, never the pool). The strategy's `onDetach` is told `CAPACITY` when the platform has no room, and `REFUSED` for the other two (`SAME_PAIR` included).
+- `PUT /live/{runId}/params` (and `live.params`) on a run that reads no source (`state: WAITING`) keeps the new values for the run and publishes nothing: the run starts with them when its first source is attached. Its answer has no `effectiveAtMs`, so `effectiveAtMs` is no longer required in `LiveParamsUpdateResult`; for a run that reads a source it is returned as before.
+- A source attached to a run started with `paper.accounts: instrument` needs its instruments named, as a start does: a wildcard (`*`, or a pair with a `*` on one side) is `400` on every plan. The plan's own rule on the wildcard is judged first, as before. A run with the shared account per currency, or with no `paper`, is not affected.
 
 ## [0.128.57] — 2026-11-11
 
