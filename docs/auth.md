@@ -90,6 +90,7 @@ A key carries scopes: a map from a resource to the actions it may take on it, in
 | `backtests` | `read`, `write`, `execute` | prepare, run, sweep and cancel backtests; read their status and results |
 | `datasets` | `read`, `write` | list and read your datasets; create, upload, import and delete them |
 | `live` | `read`, `write`, `execute` | read live runs, their signals and paper accounts; change a run; start, stop and command one, and manage its stream |
+| `signals` | `read`, `write` | read your signal channels, their notices, your subscriptions and what they received; create, change and delete a channel, publish a notice, subscribe a run and end a subscription |
 
 `read` lists and gets. `write` creates, changes, cancels or deletes without running anything.
 `execute` starts a run: a backtest, a sweep, a live run.
@@ -133,8 +134,16 @@ A key carries scopes: a map from a resource to the actions it may take on it, in
 | `PATCH /live/{runId}`, `PUT /live/{runId}/params` | `live` : `write` |
 | `POST /strategy/{strategyId}/live`, `DELETE /strategy/{strategyId}/live`, `POST /live/{runId}/commands`, `POST /live/{runId}/stream`, `DELETE /live/{runId}/stream` | `live` : `execute` |
 
+**Signal channels** — [Signal channels](signals.md)
+
+| Operation | Scope |
+|---|---|
+| `GET /signals/channels`, `GET /signals/channels/{channelId}`, `GET /signals/channels/{channelId}/notices`, `GET /signals/subscriptions`, `GET /signals/subscriptions/{subscriptionId}/deliveries` | `signals` : `read` |
+| `POST /signals/channels`, `PATCH /signals/channels/{channelId}`, `DELETE /signals/channels/{channelId}`, `POST /signals/channels/{channelId}/notices`, `POST /signals/channels/{channelId}/subscriptions`, `DELETE /signals/subscriptions/{subscriptionId}` | `signals` : `write` |
+
 **No scope:** `GET /account` and `GET /account/usage` need a valid token and nothing more;
-`GET /live/public` needs no token at all.
+`GET /live/public` and `GET /signals/channels/public` need no token at all, and
+`POST /signals/hook/{hookKey}` takes the channel's secret address as its credential instead.
 
 ### When a scope is missing
 

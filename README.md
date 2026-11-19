@@ -185,6 +185,7 @@ touched.
 | **[Account](docs/account.md)** | Your tier limits and live storage usage |
 | **[Live execution](docs/live.md)** | Run a strategy continuously against a live feed; stream its signals and update parameters over WebSocket |
 | **[Paper trading](docs/live_paper.md)** | Execute a live run's signals in simulation; read its accounts, equity curve and KPIs |
+| **[Signal channels](docs/signals.md)** | Publish notices about an instrument on a channel; subscribe live runs, which receive each notice as an attachment |
 
 ## Key Technologies
 

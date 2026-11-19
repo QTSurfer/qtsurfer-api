@@ -4271,6 +4271,660 @@ paths:
         - bearerAuth: []
       tags:
         - Live Execution
+  '/signals/channels':
+    post:
+      operationId: createSignalChannel
+      summary: Create a signal channel
+      description: |
+        Creates a channel of yours: a place where you publish notices about instruments that deserve attention, and
+        that other users (or you) subscribe their live runs to. Each notice you publish is delivered to every run
+        subscribed at that moment, as an attachment of the instrument to the run. See the
+        **[Signal channels](docs/signals.md)** guide.
+
+        `delays` are the delivery levels the channel offers, in seconds after the notice: a subscription chooses one.
+        Left out, `[0]` (delivered as soon as it is published). A new channel is `unlisted`: it is found only by its
+        `channelId`, which you hand to whoever you want. `public` also lists it in `GET /signals/channels/public`.
+
+        The answer is the channel as you, its owner, see it: with its `webhookUrl`, the secret address that publishes
+        a notice without a token (see `POST /signals/hook/{hookKey}`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignalChannelRequest'
+            example:
+              name: Early pool alerts
+              description: Pools about to move, seconds ahead.
+              visibility: public
+              delays: [0, 60]
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalChannel'
+              example:
+                channelId: 7aQk2mVn9pXr4sTw1yZb3c
+                name: Early pool alerts
+                description: Pools about to move, seconds ahead.
+                visibility: public
+                delays: [0, 60]
+                createdAtMs: 1758330000000
+                webhookUrl: 'https://api.qtsurfer.net/v1/signals/hook/7aQk2mVn9pXr4sTw1yZb3c.Jp3kQ0aZx9LmB2vT7nWc4e'
+                subscriptions: 0
+        '400':
+          description: >-
+            A `name` missing or longer than 64 characters, a `description` longer than 500, a `visibility` other than
+            `unlisted` or `public`, or `delays` that are not 1 to 4 different whole seconds from `0` to `3600`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+        '402':
+          description: Your plan does not include owning signal channels.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+        '403':
+          $ref: '#/components/responses/InsufficientScope'
+        '429':
+          description: >-
+            You already own as many channels as your plan allows (`reason: PLAN_LIMIT`, no `Retry-After`). Delete
+            one first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+      security:
+        - bearerAuth: []
+      tags:
+        - Signal Channels
+    get:
+      operationId: listSignalChannels
+      summary: List your signal channels
+      description: The channels you own, as their owner sees them, most recently created first. A deleted channel is not listed.
+      responses:
+        '200':
+          description: Your channels.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalChannelList'
+        '403':
+          $ref: '#/components/responses/InsufficientScope'
+      security:
+        - bearerAuth: []
+      tags:
+        - Signal Channels
+  '/signals/channels/public':
+    get:
+      operationId: listPublicSignalChannels
+      summary: Browse public signal channels
+      description: |
+        Every channel whose owner made it `public`, most recently created first, listed without revealing who owns
+        it. An `unlisted` channel is not here: it is reached only by its `channelId`.
+
+        Needs no `Authorization` header.
+      parameters:
+        - name: cursor
+          in: query
+          description: The `channelId` from a previous page's `_links.next.href`. Omit for the first page.
+          schema:
+            type: string
+            maxLength: 64
+        - name: limit
+          in: query
+          description: Page size. Larger values are capped, not rejected.
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: A page of public channels.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicSignalChannelPage'
+              example:
+                channels:
+                  - channelId: 7aQk2mVn9pXr4sTw1yZb3c
+                    name: Early pool alerts
+                    description: Pools about to move, seconds ahead.
+                    visibility: public
+                    delays: [0, 60]
+                    createdAtMs: 1758330000000
+                _links:
+                  next:
+                    href: '/v1/signals/channels/public?limit=20&cursor=7aQk2mVn9pXr4sTw1yZb3c'
+        '400':
+          description: An invalid `cursor` or `limit`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+      tags:
+        - Signal Channels
+  '/signals/channels/{channelId}':
+    get:
+      operationId: getSignalChannel
+      summary: Read a signal channel
+      description: |
+        Any channel, `unlisted` or `public`, by its `channelId`: what you need to decide whether to subscribe. Its owner
+        is never named. Its owner also gets `webhookUrl` and `subscriptions`.
+      parameters:
+        - name: channelId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The channel.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalChannel'
+        '403':
+          $ref: '#/components/responses/InsufficientScope'
+        '404':
+          description: No such channel, or it was deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+      security:
+        - bearerAuth: []
+      tags:
+        - Signal Channels
+    patch:
+      operationId: updateSignalChannel
+      summary: Change a signal channel of yours
+      description: |
+        Changes any of `name`, `description`, `visibility` and `delays`; what is left out stays as it is. A subscription
+        keeps the delay it chose even when `delays` no longer offers it. `rotateWebhook: true` replaces the
+        `webhookUrl`: the old address stops publishing at once. Owner only.
+      parameters:
+        - name: channelId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSignalChannelRequest'
+            example:
+              visibility: unlisted
+              rotateWebhook: true
+      responses:
+        '200':
+          description: The channel as it is now, as its owner sees it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalChannel'
+        '400':
+          description: A field outside the rules of `POST /signals/channels`, or an empty body.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+        '403':
+          $ref: '#/components/responses/InsufficientScope'
+        '404':
+          description: No such channel, or you do not own it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+      security:
+        - bearerAuth: []
+      tags:
+        - Signal Channels
+    delete:
+      operationId: deleteSignalChannel
+      summary: Delete a signal channel of yours
+      description: |
+        Deletes the channel. Its subscriptions end (`state: ENDED`), notices already published and not yet delivered
+        are not delivered (`SKIPPED`), and its `webhookUrl` stops publishing. Owner only. Deleting it again is not an
+        error.
+      parameters:
+        - name: channelId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted.
+        '403':
+          $ref: '#/components/responses/InsufficientScope'
+        '404':
+          description: No such channel, or you do not own it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+      security:
+        - bearerAuth: []
+      tags:
+        - Signal Channels
+  '/signals/channels/{channelId}/notices':
+    post:
+      operationId: publishSignalNotice
+      summary: Publish a notice on a channel of yours
+      description: |
+        Publishes a notice: an instrument that deserves attention. It is delivered to every run subscribed to the
+        channel at this moment, each at its subscription's delay, by attaching the instrument to the run (see
+        "Attaching and detaching a source" in the Live execution guide). Owner only.
+
+        `source` names the instrument: a pair of a centralized exchange, or one pool. How the run reads it (`ticker` or
+        `kline`, and its warm-up) is the subscription's to say. `ref` is a string of yours, up to 64 characters:
+        sending the same `ref` to the same channel answers the notice it already made instead of making another one, so
+        a retried request or a repeated alert is safe, and it does not count against the rate of the channel.
+        `expiresIn` is how long the notice is worth acting on: a delivery not made by then is `EXPIRED`.
+
+        The `202` is the acceptance: `deliveries` is how many subscriptions it goes to. What each delivery did is read
+        by the subscriber, not by you; you see counts in `GET /signals/channels/{channelId}/notices`.
+      parameters:
+        - name: channelId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignalNoticeRequest'
+            example:
+              source:
+                venueType: dex
+                exchange: robinhood
+                segment: uniswap-v3
+                instruments: ['0x3f4e0b2c8e1a4b6d9c0f1a2b3c4d5e6f708192a3']
+              ref: alert-8841
+              expiresIn: 300
+              data:
+                direction: up
+                confidence: high
+      responses:
+        '202':
+          description: Accepted. If the same `ref` was sent before to this channel, the notice it made, unchanged.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalNoticeAccepted'
+              example:
+                noticeId: 2Hn8sKp4vQx7mRt1wYz6Ab
+                deliveries: 12
+                receivedAtMs: 1758330000000
+                expiresAtMs: 1758330300000
+        '400':
+          description: >-
+            No `source`, a source that is not one instrument or pool of a market that can be followed live (the rules
+            of a start's `sources`, and no `*`), a `ref` longer than 64 characters, an `expiresIn` outside `1` to
+            `3600`, or `data` outside its rules.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+        '402':
+          description: Your plan does not include publishing notices.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+        '403':
+          $ref: '#/components/responses/InsufficientScope'
+        '404':
+          description: No such channel, or you do not own it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+        '429':
+          description: >-
+            The channel already published as many notices in the last 60 seconds as your plan allows:
+            `reason: NOTICE_RATE_LIMIT`, `retryable: true`, and `Retry-After` says when the next one fits.
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Seconds until the channel may publish again.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+      security:
+        - bearerAuth: []
+      tags:
+        - Signal Channels
+    get:
+      operationId: listSignalNotices
+      summary: List the notices of a channel of yours
+      description: |
+        The notices you published on the channel, most recent first, each with how its deliveries stand, as counts.
+        Who received them is never shown. Owner only.
+      parameters:
+        - name: channelId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          description: The `noticeId` from a previous page's `_links.next.href`. Omit for the first page.
+          schema:
+            type: string
+            maxLength: 64
+        - name: limit
+          in: query
+          description: Page size. Larger values are capped, not rejected.
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: A page of notices.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalNoticePage'
+        '400':
+          description: An invalid `cursor` or `limit`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+        '403':
+          $ref: '#/components/responses/InsufficientScope'
+        '404':
+          description: No such channel, or you do not own it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+      security:
+        - bearerAuth: []
+      tags:
+        - Signal Channels
+  '/signals/channels/{channelId}/subscriptions':
+    post:
+      operationId: subscribeToSignalChannel
+      summary: Subscribe a run of yours to a channel
+      description: |
+        Subscribes one of your live runs to a channel, `unlisted` or `public`, yours or anyone's. From now on every notice
+        the channel publishes is delivered to the run at `delay` seconds, by attaching the notice's instrument to it as a
+        source of `type`, with `warmFrom` seconds of warm-up. A run that waits with no source is the natural target: the
+        first delivery starts it.
+
+        `delay` must be one of the channel's `delays`; left out, the smallest. `type` is how the run reads a
+        centralized exchange's instrument, `ticker` or `kline`, and must be one the run's strategy consumes; left out,
+        `kline`. A pool is always read as `kline`. `warmFrom` is as for an attachment, `0` to `3600`; left out, `0`, so
+        the run reads from the moment of the delivery. A pool delivered to a run that already reads another is read
+        from that moment whatever `warmFrom` says.
+
+        Each run is subscribed to a channel once. Notices published before the subscription are not delivered.
+      parameters:
+        - name: channelId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignalSubscriptionRequest'
+            example:
+              runId: 5t5oAmQ4PD0lQRoCU58uE0
+              delay: 60
+      responses:
+        '201':
+          description: Subscribed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalSubscription'
+              example:
+                subscriptionId: 9cLm3nQp5rSt7uVw1xYz2A
+                channelId: 7aQk2mVn9pXr4sTw1yZb3c
+                channelName: Early pool alerts
+                runId: 5t5oAmQ4PD0lQRoCU58uE0
+                delay: 60
+                type: kline
+                warmFrom: 0
+                state: ACTIVE
+                createdAtMs: 1758330000000
+        '400':
+          description: >-
+            No `runId`, a `type` other than `ticker` or `kline` or one the run's strategy does not consume, or a
+            `warmFrom` outside `0` to `3600`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+        '402':
+          description: Your plan does not include subscribing to signal channels.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+        '403':
+          $ref: '#/components/responses/InsufficientScope'
+        '404':
+          description: No such channel (or it was deleted), or no such run of yours.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+        '409':
+          description: >-
+            The run is already subscribed to this channel, or `delay` is not one of the channel's `delays`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+        '429':
+          description: >-
+            You already hold as many active subscriptions as your plan allows (`reason: PLAN_LIMIT`, no
+            `Retry-After`). Unsubscribe one first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+      security:
+        - bearerAuth: []
+      tags:
+        - Signal Channels
+  '/signals/subscriptions':
+    get:
+      operationId: listSignalSubscriptions
+      summary: List your subscriptions
+      description: Your subscriptions, active and ended, most recently created first.
+      responses:
+        '200':
+          description: Your subscriptions.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalSubscriptionList'
+        '403':
+          $ref: '#/components/responses/InsufficientScope'
+      security:
+        - bearerAuth: []
+      tags:
+        - Signal Channels
+  '/signals/subscriptions/{subscriptionId}':
+    delete:
+      operationId: unsubscribeFromSignalChannel
+      summary: End a subscription of yours
+      description: |
+        Ends the subscription: no new notice is delivered to the run, and deliveries not yet made are `SKIPPED`. What
+        was already attached stays attached; detach it from the run if you want to (`DELETE
+        /live/{runId}/attachments/{attachmentId}`). Ending it again is not an error.
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Ended.
+        '403':
+          $ref: '#/components/responses/InsufficientScope'
+        '404':
+          description: No such subscription of yours.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+      security:
+        - bearerAuth: []
+      tags:
+        - Signal Channels
+  '/signals/subscriptions/{subscriptionId}/deliveries':
+    get:
+      operationId: listSignalDeliveries
+      summary: List what a subscription of yours received
+      description: |
+        Every notice the subscription was due to receive, most recent first, with what its delivery did: `PENDING`
+        (not due yet), `ATTACHED` (the instrument was attached to the run: read the run's `attachments` for how the
+        attachment stands), `REFUSED` (the run could not take it; `reason` says why), `EXPIRED` (not made before the
+        notice expired) or `SKIPPED` (not made: the run was not running, the subscription ended or the channel was
+        deleted). The notice's `source` and `data` come with it.
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: cursor
+          in: query
+          description: The `noticeId` from a previous page's `_links.next.href`. Omit for the first page.
+          schema:
+            type: string
+            maxLength: 64
+        - name: limit
+          in: query
+          description: Page size. Larger values are capped, not rejected.
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: A page of deliveries.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalDeliveryPage'
+              example:
+                deliveries:
+                  - noticeId: 2Hn8sKp4vQx7mRt1wYz6Ab
+                    source:
+                      venueType: dex
+                      exchange: robinhood
+                      segment: uniswap-v3
+                      instruments: ['0x3f4e0b2c8e1a4b6d9c0f1a2b3c4d5e6f708192a3']
+                    data:
+                      direction: up
+                    receivedAtMs: 1758330000000
+                    dueAtMs: 1758330060000
+                    status: ATTACHED
+                    attachmentId: 3p5YyWkq0vH2nJb7LrT9Zc
+                    deliveredAtMs: 1758330060400
+        '400':
+          description: An invalid `cursor` or `limit`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+        '403':
+          $ref: '#/components/responses/InsufficientScope'
+        '404':
+          description: No such subscription of yours.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+      security:
+        - bearerAuth: []
+      tags:
+        - Signal Channels
+  '/signals/hook/{hookKey}':
+    post:
+      operationId: publishSignalNoticeByHook
+      summary: Publish a notice through a channel's webhook address
+      description: |
+        The same as `POST /signals/channels/{channelId}/notices`, for a sender that cannot get a token or set headers:
+        the address itself, the channel's `webhookUrl`, is the credential. Keep it secret; replace it with
+        `PATCH /signals/channels/{channelId}` and `rotateWebhook: true` if it leaks.
+
+        Needs no `Authorization` header. The body, the limits and the answers are those of publishing with a token.
+      parameters:
+        - name: hookKey
+          in: path
+          required: true
+          description: The last part of the channel's `webhookUrl`, as it is.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignalNoticeRequest'
+      responses:
+        '202':
+          description: Accepted, as `POST /signals/channels/{channelId}/notices`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignalNoticeAccepted'
+        '400':
+          description: As `POST /signals/channels/{channelId}/notices`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+        '402':
+          description: The owner's plan does not include publishing notices.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+        '404':
+          description: Not a channel's current webhook address (unknown, replaced, or the channel was deleted).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+        '429':
+          description: >-
+            As `POST /signals/channels/{channelId}/notices` (`reason: NOTICE_RATE_LIMIT`, with `Retry-After`).
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+              description: Seconds until the channel may publish again.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+      tags:
+        - Signal Channels
 components:
   responses:
     InsufficientScope:
@@ -8227,6 +8881,331 @@ components:
           type: integer
           format: int64
           description: Epoch milliseconds — the market position every execution applies this command at.
+    SignalChannelRequest:
+      type: object
+      required: [name]
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: The name subscribers see. Your own user is never shown.
+        description:
+          type: string
+          maxLength: 500
+        visibility:
+          type: string
+          enum: [unlisted, public]
+          default: unlisted
+          description: '`unlisted`: found only by its `channelId`. `public`: also listed in `GET /signals/channels/public`.'
+        delays:
+          type: array
+          minItems: 1
+          maxItems: 4
+          uniqueItems: true
+          items:
+            type: integer
+            minimum: 0
+            maximum: 3600
+          default: [0]
+          description: The delivery levels offered, in seconds after a notice is published. A subscription chooses one.
+    UpdateSignalChannelRequest:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        description:
+          type: string
+          maxLength: 500
+        visibility:
+          type: string
+          enum: [unlisted, public]
+        delays:
+          type: array
+          minItems: 1
+          maxItems: 4
+          uniqueItems: true
+          items:
+            type: integer
+            minimum: 0
+            maximum: 3600
+        rotateWebhook:
+          type: boolean
+          description: '`true` replaces `webhookUrl` with a new address; the old one stops publishing at once.'
+    SignalChannel:
+      type: object
+      required: [channelId, name, visibility, delays, createdAtMs]
+      description: A signal channel. `webhookUrl` and `subscriptions` are present only for its owner.
+      properties:
+        channelId:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        visibility:
+          type: string
+          enum: [unlisted, public]
+        delays:
+          type: array
+          items:
+            type: integer
+          description: The delivery levels offered, in seconds, smallest first.
+        createdAtMs:
+          type: integer
+          format: int64
+        webhookUrl:
+          type: string
+          description: Owner only. The secret address that publishes a notice without a token (`POST /signals/hook/{hookKey}`).
+        subscriptions:
+          type: integer
+          description: Owner only. How many subscriptions are active. Who holds them is never shown.
+    SignalChannelList:
+      type: object
+      required: [channels]
+      properties:
+        channels:
+          type: array
+          items:
+            $ref: '#/components/schemas/SignalChannel'
+    PublicSignalChannelPage:
+      type: object
+      required: [channels]
+      properties:
+        channels:
+          type: array
+          items:
+            $ref: '#/components/schemas/SignalChannel'
+        _links:
+          $ref: '#/components/schemas/PublicLiveListLinks'
+    SignalNoticeSource:
+      type: object
+      required: [venueType, exchange, segment, instruments]
+      additionalProperties: false
+      description: >-
+        The instrument a notice is about: `LiveSourceRequest` without `type`, which is the subscription's to say, and with
+        the instruments named one by one.
+      properties:
+        venueType:
+          type: string
+          enum: [cex, dex]
+        exchange:
+          type: string
+          description: As in `LiveSourceRequest`.
+        segment:
+          type: string
+          description: As in `LiveSourceRequest`.
+        instruments:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items:
+            type: string
+          description: >-
+            For a `cex` source, 1 to 10 pairs written `BASE/QUOTE`, with no `*`. For a `dex` source, exactly one entry,
+            the address of the pool.
+    SignalNoticeRequest:
+      type: object
+      required: [source]
+      additionalProperties: false
+      properties:
+        source:
+          $ref: '#/components/schemas/SignalNoticeSource'
+        ref:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: A string of yours. Sending the same `ref` to the same channel answers the notice it already made.
+        expiresIn:
+          type: integer
+          minimum: 1
+          maximum: 3600
+          default: 300
+          description: Seconds the notice is worth acting on. A delivery not made by then is `EXPIRED`.
+        data:
+          type: object
+          additionalProperties:
+            type: string
+            minLength: 1
+            maxLength: 256
+          maxProperties: 16
+          description: >-
+            Anything else you want subscribers to read with the notice, as text: up to 16 entries, each key lower case
+            (letters, digits, `_`, parts separated by `.`, up to 64 characters) and each value 1 to 256 characters with no
+            control characters. It is shown with the delivery; it does not reach the strategy.
+    SignalNoticeAccepted:
+      type: object
+      required: [noticeId, deliveries, receivedAtMs, expiresAtMs]
+      properties:
+        noticeId:
+          type: string
+        deliveries:
+          type: integer
+          description: How many subscriptions the notice goes to.
+        receivedAtMs:
+          type: integer
+          format: int64
+        expiresAtMs:
+          type: integer
+          format: int64
+    SignalDeliveryCounts:
+      type: object
+      required: [pending, attached, refused, expired, skipped]
+      description: How the deliveries of a notice stand, by status (see `SignalDelivery`).
+      properties:
+        pending:
+          type: integer
+        attached:
+          type: integer
+        refused:
+          type: integer
+        expired:
+          type: integer
+        skipped:
+          type: integer
+    SignalNotice:
+      type: object
+      required: [noticeId, source, receivedAtMs, expiresAtMs, deliveries]
+      properties:
+        noticeId:
+          type: string
+        ref:
+          type: string
+        source:
+          $ref: '#/components/schemas/SignalNoticeSource'
+        data:
+          type: object
+          additionalProperties:
+            type: string
+        receivedAtMs:
+          type: integer
+          format: int64
+        expiresAtMs:
+          type: integer
+          format: int64
+        deliveries:
+          $ref: '#/components/schemas/SignalDeliveryCounts'
+    SignalNoticePage:
+      type: object
+      required: [notices]
+      properties:
+        notices:
+          type: array
+          items:
+            $ref: '#/components/schemas/SignalNotice'
+        _links:
+          $ref: '#/components/schemas/PublicLiveListLinks'
+    SignalSubscriptionRequest:
+      type: object
+      required: [runId]
+      additionalProperties: false
+      properties:
+        runId:
+          type: string
+          description: One of your live runs.
+        delay:
+          type: integer
+          description: One of the channel's `delays`. Left out, the smallest.
+        type:
+          type: string
+          enum: [ticker, kline]
+          default: kline
+          description: How the run reads a centralized exchange's instrument; one its strategy consumes. A pool is always read as `kline`.
+        warmFrom:
+          type: integer
+          minimum: 0
+          maximum: 3600
+          default: 0
+          description: Seconds of warm-up of each attachment a delivery makes, as for `POST /live/{runId}/attachments`.
+    SignalSubscription:
+      type: object
+      required: [subscriptionId, channelId, runId, delay, type, warmFrom, state, createdAtMs]
+      properties:
+        subscriptionId:
+          type: string
+        channelId:
+          type: string
+        channelName:
+          type: string
+        runId:
+          type: string
+        delay:
+          type: integer
+        type:
+          type: string
+          enum: [ticker, kline]
+        warmFrom:
+          type: integer
+        state:
+          type: string
+          description: '`ACTIVE`, or `ENDED` (you ended it, or the channel was deleted). The set may grow.'
+        createdAtMs:
+          type: integer
+          format: int64
+    SignalSubscriptionList:
+      type: object
+      required: [subscriptions]
+      properties:
+        subscriptions:
+          type: array
+          items:
+            $ref: '#/components/schemas/SignalSubscription'
+    SignalDelivery:
+      type: object
+      required: [noticeId, source, receivedAtMs, dueAtMs, status]
+      description: One notice due to one subscription, and what its delivery did.
+      properties:
+        noticeId:
+          type: string
+        source:
+          $ref: '#/components/schemas/SignalNoticeSource'
+        data:
+          type: object
+          additionalProperties:
+            type: string
+        receivedAtMs:
+          type: integer
+          format: int64
+        dueAtMs:
+          type: integer
+          format: int64
+          description: When the notice was due to this subscription, its publication plus the subscription's `delay`.
+        status:
+          type: string
+          description: '`PENDING`, `ATTACHED`, `REFUSED`, `EXPIRED` or `SKIPPED` (see `GET /signals/subscriptions/{subscriptionId}/deliveries`). The set may grow.'
+        reason:
+          type: string
+          description: >-
+            Why it is `REFUSED` or `SKIPPED`. `REFUSED`: `PLAN_LIMIT` (a limit of your plan: the instruments a run may
+            read, the pools you may follow at once, the runs you may have reading at once), `PLAN_REQUIRED` (your plan no
+            longer includes live runs or subscriptions), `OTHER_FEED` (the run reads another market feed), `NOT_ACCEPTED`
+            (the run's strategy does not accept that instrument or `type`) or `CAPACITY` (the platform had no room).
+            `SKIPPED`: `NOT_RUNNING`, `UNSUBSCRIBED` or `CHANNEL_DELETED`. The set may grow.
+        message:
+          type: string
+          description: A sentence saying more about a `REFUSED` delivery. Do not parse it.
+        attachmentId:
+          type: string
+          description: The attachment the delivery made, when it is `ATTACHED`.
+        deliveredAtMs:
+          type: integer
+          format: int64
+          description: When the delivery was made, or refused.
+    SignalDeliveryPage:
+      type: object
+      required: [deliveries]
+      properties:
+        deliveries:
+          type: array
+          items:
+            $ref: '#/components/schemas/SignalDelivery'
+        _links:
+          $ref: '#/components/schemas/PublicLiveListLinks'
   securitySchemes:
     bearerAuth:
       type: http
@@ -8326,6 +9305,19 @@ tags:
       - Change a run's own visibility, name, or description.
       - Update a running strategy's parameters without restarting it.
       - Mint a token to receive a run's signals and updates in real time over WebSocket.
+  - name: Signal Channels
+    description: |-
+      The **signal channel** endpoints let a provider — any user, typically a service that spots instruments about to
+      move — publish **notices** about an instrument of a centralized exchange or a pool, and let any user subscribe
+      their live runs to the provider's channel. Each notice is delivered to every subscribed run by attaching the
+      instrument to it, immediately or after the delay the subscription chose. See
+      **[Signal channels](docs/signals.md)** for the full flow.
+
+      **Key functionalities**:
+      - Create a channel, unlisted or public, with the delivery delays it offers.
+      - Publish a notice with a token, or through the channel's secret webhook address.
+      - Browse public channels, and subscribe one of your live runs to any channel.
+      - Read what each subscription received, and how the notices of your channels were delivered.
 externalDocs:
   description: Find out more about QTSurfer API
   url: 'https://qtsurfer.com/developers'
