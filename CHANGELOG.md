@@ -7,6 +7,8 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ## [Unreleased]
 
+## [0.128.58] — 2026-11-20
+
 ### Added
 
 - Signal channels: a user publishes notices about an instrument of a centralized exchange or a pool on a channel of theirs (`POST /signals/channels`, `POST /signals/channels/{channelId}/notices`, or the channel's secret `webhookUrl` with no token) and sells access to them as offers (`POST /signals/channels/{channelId}/offers`: a delay, how many runs one subscription feeds, how long it lasts, an optional `https` `purchaseUrl`), one single-use code per sale (`POST /signals/offers/{offerId}/codes`, shown once; `DELETE /signals/codes/{codeId}` revokes it and the subscription it gave). A buyer redeems a code (`POST /signals/subscriptions`), feeds up to the offer's number of its live runs from the subscription (`POST /signals/subscriptions/{subscriptionId}/runs`) and renews it with another code of the same offer (`.../renew`); each notice reaches those runs at the offer's delay as an attachment of the instrument, and `GET /signals/subscriptions/{subscriptionId}/deliveries` says what each delivery did, per run. Channels are `unlisted` (found by their `channelId`) or `public` (`GET /signals/channels/public`, no token, with their offers). New scope resource `signals` (`read`, `write`). The plan limits are in the Signal channels guide; the refusals carry `reason` tokens: `NOTICE_RATE_LIMIT` (with `Retry-After`), `CODE_USED`, `SUBSCRIPTION_RUNS_LIMIT`, `RUN_FED_BY_ANOTHER`, `SUBSCRIPTION_INACTIVE`, `OTHER_OFFER`, `DOES_NOT_EXPIRE`, `OFFER_LIMIT`, `CODE_LIMIT`.
