@@ -141,7 +141,7 @@ POST /signals/channels/{channelId}/subscriptions
 | `runId` | Required. One of your live runs. Each run is subscribed to a channel once. |
 | `delay` | Optional. One of the channel's `delays`; left out, the smallest. |
 | `type` | Optional, `ticker` or `kline`, `kline` by default. How the run reads a centralized exchange's instrument; it must be one the run's strategy consumes. A pool is always read as `kline`. |
-| `warmFrom` | Optional, `0` to `3600`, `0` by default: the warm-up of each attachment a delivery makes (see [Warming up](live.md#warming-up)). With `0` the strategy reads from the moment of the delivery, which is the fastest way to act on a notice. A pool delivered to a run that already reads another is read from that moment, whatever this says. |
+| `warmFrom` | Optional, `0` to `3600`, `0` by default: the warm-up of each attachment a delivery makes (see [Warming up](live.md#warming-up-warmfrom)). With `0` the strategy reads from the moment of the delivery, which is the fastest way to act on a notice. A pool delivered to a run that already reads another is read from that moment, whatever this says. |
 
 Any channel can be subscribed to, `unlisted` or `public`, yours or anyone's, as long as you have its `channelId`.
 `DELETE /signals/subscriptions/{subscriptionId}` ends a subscription. What it already attached stays attached.
