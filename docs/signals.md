@@ -149,7 +149,9 @@ Any channel can be subscribed to, `unlisted` or `public`, yours or anyone's, as 
 ## Reading deliveries
 
 `GET /signals/subscriptions/{subscriptionId}/deliveries` lists every notice the subscription was due to receive,
-most recent first, with its `source` and `data`, and what its delivery did:
+most recent first, and what its delivery did. A delivery carries the notice's `source` and `data` from its `dueAtMs`
+on; before that it says that a notice is coming and when, not what it is about, so a subscription at a delayed level
+learns of the instrument no earlier than its level does.
 
 | `status` | Meaning |
 |---|---|

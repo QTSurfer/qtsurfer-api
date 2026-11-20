@@ -4803,7 +4803,9 @@ paths:
         (not due yet), `ATTACHED` (the instrument was attached to the run: read the run's `attachments` for how the
         attachment stands), `REFUSED` (the run could not take it; `reason` says why), `EXPIRED` (not made before the
         notice expired) or `SKIPPED` (not made: the run was not running, the subscription ended or the channel was
-        deleted). The notice's `source` and `data` come with it.
+        deleted). The notice's `source` and `data` come with it from `dueAtMs` on: before that a delivery says that a
+        notice is coming and when, not what it is about, so a subscription at a delayed level learns of the instrument
+        no earlier than its level.
       parameters:
         - name: subscriptionId
           in: path
@@ -9157,15 +9159,20 @@ components:
             $ref: '#/components/schemas/SignalSubscription'
     SignalDelivery:
       type: object
-      required: [noticeId, source, receivedAtMs, dueAtMs, status]
-      description: One notice due to one subscription, and what its delivery did.
+      required: [noticeId, receivedAtMs, dueAtMs, status]
+      description: >-
+        One notice due to one subscription, and what its delivery did. Until `dueAtMs` it says that a notice is
+        coming and when, not what it is about: `source` and `data` are present from `dueAtMs` on.
       properties:
         noticeId:
           type: string
         source:
-          $ref: '#/components/schemas/SignalNoticeSource'
+          description: The notice's instrument. Present from `dueAtMs` on.
+          allOf:
+            - $ref: '#/components/schemas/SignalNoticeSource'
         data:
           type: object
+          description: The notice's text. Present from `dueAtMs` on.
           additionalProperties:
             type: string
         receivedAtMs:

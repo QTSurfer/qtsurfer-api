@@ -25,6 +25,7 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ### Changed
 
+- A signal delivery not due yet (`GET /signals/subscriptions/{subscriptionId}/deliveries`) no longer shows the notice's `source` and `data`: they are present from its `dueAtMs` on, so a subscription at a delayed level does not learn of the instrument before its time. `source` is no longer a required field of `SignalDelivery`.
 - A live run can read several `dex` pools at once, on the same chain and protocol (attach each as its own source), up to the plan's
   limit on pools followed at once, which is now also counted when a run is started with a pool. A pool attached to a run that already
   reads another is read from the moment it takes effect: `warmFrom` above `0` is refused with `400`, and `0` or leaving it out is
