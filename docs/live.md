@@ -85,7 +85,7 @@ What you can watch while it waits, on `GET`/`PATCH` `.../live`:
 
 | `state` | What it means |
 |---|---|
-| `STARTING` | Accepted; no runner has reported on it yet. |
+| `STARTING` | Accepted; the platform has not reported on it yet. |
 | `WAITING` | Running with no market-data source attached: it holds no place on the platform and reads no data until you [attach one](#attaching-and-detaching-a-source). |
 | `RUNNING` | Running normally. |
 | `LAGGING` | Running, but behind the market data: usual while it catches up after starting or after a platform restart. It clears by itself. |
@@ -147,8 +147,9 @@ detail: the text is for people.
 
 ## What a run is doing: `stats`
 
-While a run is being executed the platform keeps its latest counters and refreshes them about once a
-minute. `GET /strategy/{strategyId}/live` and `GET /live/{runId}` return them as `stats`:
+While a run is being executed the platform keeps its latest counters and refreshes them periodically
+(`asOfMs` says when they were last written). `GET /strategy/{strategyId}/live` and `GET /live/{runId}` return
+them as `stats`:
 
 ```json
 "stats": {
@@ -164,11 +165,11 @@ minute. `GET /strategy/{strategyId}/live` and `GET /live/{runId}` return them as
 | Field | What it means |
 |---|---|
 | `processed` | Updates of instruments the run has accepted since it started executing. It can start again from zero if the run is restarted. |
-| `opsPerSecond` | Updates accepted per second over the last refresh. An average over about a minute, so it does not jump from one update to the next. `0` when none arrived. |
+| `opsPerSecond` | Updates accepted per second over the last refresh interval. An average, so it does not jump from one update to the next. `0` when none arrived. |
 | `instrumentsSeen` | Distinct instruments the run has received an update for. |
 | `asOfMs` | When these counters were last written. |
 | `progressedAtMs` | The last refresh in which `processed` had grown. Absent until the run has processed anything. |
-| `stale` | `true` when the run is meant to be running and its counters have not been refreshed for several refresh intervals. |
+| `stale` | `true` when the run is meant to be running and its counters have not been refreshed for much longer than they usually are. |
 
 Three things to know:
 
@@ -196,7 +197,7 @@ Three things to know:
 `exchange` and `segment` are the ids `GET /exchanges` lists, in lower-case, and `venueType` is the one it
 gives the exchange: `cex` for a centralized exchange, `dex` for a decentralized one (`cx`, the spelling used
 before, is still read as `cex`). The segment has to be one of the exchange's `liveSegments`: the segments for
-which live data is published, `spot` for a centralized exchange today.
+which live data is published.
 
 The three have to go together in that list, and a start whose source does not is refused with `400`
 naming what the list has, before it takes a place: `sources[0].exchange 'coinbase' is not a cex exchange
@@ -216,8 +217,7 @@ QTScript strategy is a ticker strategy unless its header says otherwise (`strate
 a Java one is whichever base class it extends (`AbstractTickerStrategy` or `AbstractKlineStrategy`).
 
 `type` is `ticker` or `kline`. Both connect to the lightest (fastest) cadence available for the
-exchange — today that is 1 tick/second on every supported exchange; choosing among several
-cadences is not offered yet.
+exchange; choosing among several cadences is not offered.
 
 `instruments` can be left out. A QTScript strategy can declare which instruments it accepts with an `instruments`
 line in its source. When the compilation of the strategy records that selection as a list of pairs, a
@@ -259,14 +259,14 @@ to `dex`:
 
 | Field | For a `dex` source |
 |---|---|
-| `exchange` | The chain the pool is on: an exchange `GET /exchanges` lists with `venueType: dex`. `robinhood` (Robinhood Chain) is the only one today. |
-| `segment` | The protocol of the pool, one of that exchange's `segments`. `uniswap-v3` is the only one today. |
+| `exchange` | The chain the pool is on: an exchange `GET /exchanges` lists with `venueType: dex` and a protocol in its `liveSegments`, for example `robinhood` (Robinhood Chain). |
+| `segment` | The protocol of the pool, one of that exchange's `liveSegments`, for example `uniswap-v3`. |
 | `type` | `kline` only. A `ticker` source is not available for a pool, and a ticker strategy cannot run on one. |
 | `instruments` | Exactly one entry: the pool's address, `0x` and 40 hexadecimal digits, not case-sensitive. It cannot be left out and `*` is not accepted. |
 
 To find pools to run, list the exchange's instruments: `GET /exchange/robinhood/uniswap-v3/instruments` returns
-the 50 pools with the most volume over the last 24 hours among those with at least 10,000 US dollars of
-liquidity, refreshed every hour. Each has its `id` (the address to put in `instruments`), its pair named the
+the pools with the most volume over the last 24 hours among those with enough liquidity, refreshed
+periodically. Each has its `id` (the address to put in `instruments`), its pair named the
 way the signals name it, its fee tier, liquidity and volume (see
 [Pools of a decentralized exchange](market_data.md#pools-of-a-decentralized-exchange)). The list is a place to
 start, not the whole market: a run can read any Uniswap V3 pool of the chain, listed or not.
@@ -276,8 +276,8 @@ What the strategy receives:
 - One candle per second of the pool's trades, with the usual `open`, `high`, `low`, `close` and `volume`. A
   second in which nothing traded still gets a candle: it repeats the previous close, with zero volume and zero
   trades, so a strategy that counts bars is counting time even on a pool that trades rarely.
-- A candle is published once its second is over and late trades have had a moment to arrive: up to about three
-  seconds after the second ends. Signals therefore trail the market by up to that wait plus the strategy's own work.
+- A candle is published once its second is over and late trades have had a moment to arrive. Signals therefore
+  trail the market by that wait plus the strategy's own work.
 - A pool that has not traded since the platform started following it produces no candles until its first trade:
   there is no price yet to repeat.
 - The signals of the run name the pair as the pool's tokens written `BASE/QUOTE`, such as `WETH/USDG`, in
@@ -286,9 +286,8 @@ What the strategy receives:
 
 Starting and warming up work as for any run (see [Warming up](#warming-up-warmfrom)). The platform follows a
 pool when a run asks for it and replays the history the run's `warmFrom` calls for before the first live
-candle, so a run on a pool nobody else is reading catches up at roughly six times the speed of the market:
-the default warm-up (up to 15 minutes) takes up to a few minutes, and `warmFrom: 3600` about ten. While it
-catches up the run can show `LAGGING`. A run that starts on a pool the platform is already following gets the
+candle, so a run on a pool nobody else is reading takes a while to catch up: the longer the warm-up, the
+longer it takes. While it catches up the run can show `LAGGING`. A run that starts on a pool the platform is already following gets the
 history that exists for it, which is shorter than its `warmFrom` when the pool was started only a moment ago.
 
 A `dex` run whose pool cannot be served fails within seconds instead of waiting for candles that will not come,
@@ -296,7 +295,7 @@ and the platform stops it, so it holds no place (see [Why a run failed or stoppe
 
 - The address is not a pool of that protocol on that chain, or the platform cannot read its tokens: the
   `reason` is `The run could not start: its pool address is not a pool of that protocol on that chain.` It takes
-  about fifteen seconds. Start the same address again right away and it can take up to half a minute.
+  a few seconds. Start the same address again right away and it can take a little longer.
 - The platform is following as many pools as it can: the `reason` is `The run could not start: the platform is
   following as many pools as it can right now. Try again later.` It takes a few seconds. Starting again works
   once there is room: a pool is released a few minutes after the last run reading it has stopped.
@@ -315,9 +314,9 @@ source](#attaching-and-detaching-a-source)). They have to be on the same chain a
 how many pools you can follow at once across your runs (`429`, with the number). Two things are different from a start:
 
 - **A pool attached to a run that is already reading another is read from the moment it takes effect.** It has no history:
-  send `warmFrom: 0` or leave it out, since any other value is a `400`. Its first signal arrives about 25 seconds after the
-  request in our measurements: the attach takes effect 15 seconds ahead, and then come the wait for late trades (up to
-  about three seconds) and the second of the candle itself. Only the first source of a waiting run, which starts the run,
+  send `warmFrom: 0` or leave it out, since any other value is a `400`. Its first signal arrives some seconds after the
+  request: the attach takes effect a little ahead of time, and then come the wait for late trades and the second of the
+  candle itself. Only the first source of a waiting run, which starts the run,
   takes `warmFrom` as a start does.
 - **One pool per pair.** The strategy sees the pair (`WETH/USDG`), never the pool, so it could not tell two pools of the same
   pair apart, and a pair usually has several (one per fee tier). The first pool to give a candle of the pair keeps it. A pool of
@@ -439,7 +438,7 @@ replay from. Set it in the body of `POST /strategy/{strategyId}/live`, next to `
 
 | `warmFrom` | What happens |
 |---|---|
-| omitted | The platform replays from the start of the current 15-minute block: between 0 and 900 seconds before the run's start, depending on when it starts (0 if it starts exactly on a quarter hour). The first bar of a 15-minute window is then complete. |
+| omitted | The platform chooses how far back to replay, so that the first bar of the usual windows is complete. The value it chose is reported back as `warmFrom`. |
 | `0` | No replay. The run starts at its start: it delivers its first signal as soon as it is running, with indicators that start empty and a first bar of a window that can be partial. |
 | `1` to `3600` | The strategy sees that many seconds of the feed before the start, then carries on live. |
 
@@ -447,8 +446,7 @@ replay from. Set it in the body of `POST /strategy/{strategyId}/live`, next to `
   above `3600`, a fraction, text) is refused with `400`.
 - Choose it for what the strategy needs. A strategy with long indicator periods should ask for at least the
   time its slowest indicator takes to fill: with `0`, its first values are computed on whatever has arrived
-  since the start, and left out, the replay can be as short as `0` seconds (a run that starts exactly on a
-  quarter hour) and never longer than `900`.
+  since the start; with it left out, the replay is the platform's choice and depends on when the run starts.
 - It can be set **only when the run is started**. It is not one of the parameters `PUT /live/{runId}/params`
   accepts, and it cannot be added later: to change it, stop the run and start it again.
 - The run reports the value in effect back as `warmFrom` when you read it (the start response,
@@ -556,9 +554,8 @@ strategy again (`POST /strategy` with the same source, which compiles it afresh)
 run.
 
 The response's `effectiveAtMs` is not "now" — it is a few seconds out, the earliest moment the new
-value is guaranteed to be applied. This margin exists so that if a run has more than one execution
-worker behind it, they all pick up the change at the same point rather than one applying it a few
-events before the other.
+value is guaranteed to be applied. This margin exists so that every execution of the run picks up the
+change at the same point rather than one applying it a few events before the other.
 
 ```
 PUT /live/6TzAPiPpsOWwBLdLBZCxwH/params
@@ -592,8 +589,8 @@ body may carry. It answers `202` with `commandId` and `effectiveAtMs`, the marke
 behind the run applies it at.
 
 **A command is transient**, unlike a parameter: it is an event, not a stored value, and nothing about it is written
-to the run. A replica that restarts replays only its recent market history, so a command from before that window
-never reaches it — a peer that was already running when it arrived applies it, one that starts later does not.
+to the run. It is not replayed when an execution restarts, so a command from before a restart
+never reaches the restarted execution — one that was already running when it arrived applies it, one that starts later does not.
 Anything the strategy needs to remember across a restart belongs in a parameter (`PUT /live/{runId}/params`), which
 does have a stored value.
 
@@ -722,10 +719,10 @@ the newest `offset` the channel holds:
 {"id": 5, "history": {"publications": [{"data": {"v": 1, "signalId": "…", …}, "offset": 41}, {"data": {"v": 1, "signalId": "…", …}, "offset": 42}], "epoch": "SQRGfEAq", "offset": 42}}
 ```
 
-- **What it holds.** The signals of the `sandbox` stage only: the 300 most recent, whatever their age,
-  until 5 minutes after the run's last `sandbox` signal, when it empties. Nothing from the `live` stage is
-  kept: once a run is promoted the history stops growing, and it empties 5 minutes after the last
-  `sandbox` signal. To read further back, or any `live` signal, use `GET /live/{runId}/signals` (below).
+- **What it holds.** The most recent signals of the `sandbox` stage only, for a limited time after the run's
+  last `sandbox` signal, when it empties. Nothing from the `live` stage is kept: once a run is promoted the
+  history stops growing, and it empties a little after the last `sandbox` signal. To read further back, or any
+  `live` signal, use `GET /live/{runId}/signals` (below).
   A run that starts in `live` (see [Starting again does not repeat the trial](#starting-again-does-not-repeat-the-trial))
   never has a history here; start it with `"sandbox": true` if you need one.
 - **Nothing is replayed on its own.** Subscribing, and resubscribing after a disconnect, never delivers
@@ -879,7 +876,7 @@ If your plan stops letting you broadcast, the URL is no longer shown and open co
 ### Rotating and revoking it
 
 - `POST /live/{runId}/stream` gives the run a **new** address and retires the old one: connections on the old
-  address close with `1008` within about 15 seconds. Only for a running run that was started with a stream.
+  address close with `1008` shortly afterwards. Only for a running run that was started with a stream.
 - `DELETE /live/{runId}/stream` revokes it **for good**: connections close and the address answers `404`. The
   run itself keeps running, and a stream cannot be added to it again: start the run again with `stream: true`
   for a new one. It is always allowed, whatever your plan, and repeating it is not an error.

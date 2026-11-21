@@ -447,7 +447,7 @@ are not visible outside `onCommand`'s body, the same way `$indicator` is not vis
 
 Setting a `param` or writing to a `StateStore` from inside `onCommand` both take effect immediately, but
 neither survives a restart: a `StateStore` is memory, gone on a restart the same as a field. Only
-[`PUT /live/{runId}/params`](live.md#runtime-parameters) writes something a restarted replica actually
+[`PUT /live/{runId}/params`](live.md#runtime-parameters) writes something a restarted run actually
 starts from. `getStateStore(...)` here is not about durability — it is how `onCommand` reaches the
 per-instrument state a window body already reads, since a command carries no instrument of its own.
 
@@ -531,10 +531,10 @@ A registered QTScript strategy is prepared, executed and swept like any other:
 |---|---|---|---|
 | ticker (default) | yes | yes | yes |
 | `kline` | yes | yes | yes |
-| `funding` | yes | not yet | not yet |
+| `funding` | yes | no | no |
 
 See [Data sources](backtest_execute.md#data-sources) for the details, including why a `funding`
-strategy can be registered and its data prepared but not yet run.
+strategy can be registered and its data prepared but not run.
 
 ## When something is wrong
 

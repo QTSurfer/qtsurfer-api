@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: QTSurfer API
   summary: QTSurfer backend services API
-  version: 0.128.59
+  version: 0.128.60
   contact:
     name: QTSurfer Support
     email: support@qtsurfer.com
@@ -43,7 +43,7 @@ paths:
         key's expiry, not the token's: a token issued just before the key lapses keeps working
         until its own `expires_in` is over.
 
-        The answer's `scopes` say what the key may do. Where a deployment requires scopes, a key
+        The answer's `scopes` say what the key may do. A key
         that carries none is refused with `403` and the code `apikey_without_scopes`: create a key
         with at least one scope.
       responses:
@@ -75,7 +75,7 @@ paths:
               example:
                 error: invalid_credentials
         '403':
-          description: The API key is valid but carries no scopes, and this deployment requires them.
+          description: The API key is valid but carries no scopes.
           content:
             application/json:
               schema:
@@ -285,8 +285,9 @@ paths:
 
         For a decentralized exchange the segments are its protocols (`uniswap-v3` for `robinhood`; `orca`,
         `raydium`, `raydium-clmm`, `meteora` and `pumpswap` for `solana`) and the instruments are its pools,
-        each a `PoolDetail`: the 50 with most volume in the last 24 hours among those with at least 10,000 US
-        dollars of liquidity, refreshed every hour for `robinhood` and every 12 hours for `solana`. The list is a
+        each a `PoolDetail`: the ones with most volume in the last 24 hours among those with enough liquidity
+        (`meta.limit` is the most the listing holds and `meta.minTvlUsd` the least liquidity a listed pool has),
+        refreshed periodically (`meta.updatedAt`). The list is a
         place to start, not the whole market: a live run can read any pool of the protocol, listed or not. The
         pools of `solana` are for importing as datasets and for backtesting: a live run cannot read a Solana
         pool yet (its segments are not in `liveSegments` of `GET /exchanges`).
@@ -383,11 +384,10 @@ paths:
         One segment = one hour, aligned to UTC. The `hour` query parameter selects
         the segment and must match `YYYY-MM-DDTHH` (no minutes/seconds, no timezone
         suffix). Example: `hour=2026-10-15T10` is the segment `h10.lastra` of
-        2026-10-15, covering `[10:00:00Z, 11:00:00Z)`. The hour has to be one of the last 7 days (see
+        2026-10-15, covering `[10:00:00Z, 11:00:00Z)`. The hour has to be a recent one (see
         below): read the example as the shape of the value.
 
-        **Which hours.** The last 7 days: an hour that started no more than 7 days before the
-        request and has ended. This route gives one hour of one instrument, fast; it is not how to
+        **Which hours.** Recent hours only: an hour that has ended and is not too old. This route gives one hour of one instrument, fast; it is not how to
         get older history or a range. An older hour is `400` with `reason: OUTSIDE_WINDOW`, and the
         error carries `next`, the `POST /datasets/imports` request that imports exactly that hour
         as a dataset (add a `name`); a longer span is imported the same way, within your plan's
@@ -396,7 +396,7 @@ paths:
         **The hour in progress and the last hours.** The hour in progress, and an hour that has ended
         but is not stored yet, can be answered with what has been received so far, marked provisional:
         `200` with `X-Data-Status: provisional` and `X-Data-Through`, the instant of the last row.
-        Not every deployment of the service gives provisional answers: where it does not, those hours
+        The service does not always give provisional answers: when it does not, those hours
         are `404` with `reason: NOT_YET_AVAILABLE` and a `Retry-After`, and a client that needs them
         handles both. A provisional answer is not to keep: it can still grow, and the stored hour
         replaces it once there is one. It takes seconds to build, longer the further the hour has gone,
@@ -504,7 +504,7 @@ paths:
         '400':
           description: |
             Missing or malformed parameters (e.g. `hour` not `YYYY-MM-DDTHH`), an `hour` in the
-            future, or an hour older than the last 7 days (`reason: OUTSIDE_WINDOW`, with `next`).
+            future, or an hour older than the hours the route serves (`reason: OUTSIDE_WINDOW`, with `next`).
           content:
             application/json:
               schema:
@@ -516,10 +516,10 @@ paths:
                     code: 400
                     message: "hour must match YYYY-MM-DDTHH"
                 outsideWindow:
-                  summary: The hour is older than the last 7 days
+                  summary: The hour is older than the hours the route serves
                   value:
                     code: 400
-                    message: "Hour older than 7 days: import it as a dataset"
+                    message: "Hour too old: import it as a dataset"
                     reason: OUTSIDE_WINDOW
                     next:
                       method: POST
@@ -598,7 +598,7 @@ paths:
         format read the other with the same code. Use this endpoint when a
         per-tick payload would be too large for the window of interest.
 
-        The hours served (the last 7 days; the hour in progress and the last hours may be provisional), the timestamps
+        The hours served (recent hours only; the hour in progress and the last hours may be provisional), the timestamps
         (`ts` in microseconds, `X-Ts-Unit: micros`) and the errors are those of the tickers route.
       parameters:
         - name: exchangeId
@@ -677,7 +677,7 @@ paths:
         '400':
           description: |
             Missing or malformed parameters (e.g. `hour` not `YYYY-MM-DDTHH`), an `hour` in the
-            future, or an hour older than the last 7 days (`reason: OUTSIDE_WINDOW`, with `next`).
+            future, or an hour older than the hours the route serves (`reason: OUTSIDE_WINDOW`, with `next`).
           content:
             application/json:
               schema:
@@ -689,10 +689,10 @@ paths:
                     code: 400
                     message: "hour must match YYYY-MM-DDTHH"
                 outsideWindow:
-                  summary: The hour is older than the last 7 days
+                  summary: The hour is older than the hours the route serves
                   value:
                     code: 400
-                    message: "Hour older than 7 days: import it as a dataset"
+                    message: "Hour too old: import it as a dataset"
                     reason: OUTSIDE_WINDOW
                     next:
                       method: POST
@@ -1249,9 +1249,9 @@ paths:
                 $ref: '#/components/schemas/ResponseError'
         '429':
           description: |
-            Rate limited. Returned when the global queue exceeds capacity or the user has too many
+            Rate limited. Returned when the platform is at capacity or the user has too many
             active backtests. Does not apply to `exchangeId: user` — a dataset prepare reads an
-            already-ingested file rather than enqueueing worker capacity.
+            already-ingested file rather than using platform capacity.
           content:
             application/json:
               schema:
@@ -1438,7 +1438,7 @@ paths:
                 retryable: false
                 upgradeUrl: https://example.com/upgrade
         '429':
-          description: Sweep queue or user concurrency limit reached.
+          description: Sweep capacity or user concurrency limit reached.
           content:
             application/json:
               schema:
@@ -1857,7 +1857,7 @@ paths:
                 storeSignals:
                   type: boolean
                   description: |
-                    When true, the worker uploads emitted signals to object storage and the
+                    When true, the emitted signals are stored and the
                     response includes `signalsUrl` / `signalsId` fields. Defaults to false.
                   default: false
                 equityCurve:
@@ -1956,7 +1956,7 @@ paths:
                 retryable: false
                 upgradeUrl: https://example.com/upgrade
         '429':
-          description: Rate limited (global queue at capacity or per-user limit reached)
+          description: Rate limited (the platform is at capacity or a per-user limit was reached)
           content:
             application/json:
               schema:
@@ -2172,7 +2172,7 @@ paths:
         discovered from the data, not declared, for all three.
 
         A CSV upload is converted to our native columnar format (`lastra`) for storage. A parquet
-        or lastra upload is stored as-is today. Either way, always check `dataFormat` on
+        or lastra upload is stored as it is. Either way, always check `dataFormat` on
         `GET /datasets/{datasetId}` and `GET /datasets/{datasetId}/uploads/{uploadId}` for which
         one `dataUrl` actually is, rather than assuming from how you uploaded it (a converted CSV
         and an uploaded lastra file both report `dataFormat: "lastra"`).
@@ -2214,7 +2214,7 @@ paths:
                 instrument: "BTC/USDT"
                 uploadId: "up_1a2b3c4d5e6f7a8b"
                 upload:
-                  url: "https://storage.qtsurfer.com/00000000-.../uploads/up_1a2b3c4d5e6f7a8b/raw.csv?X-Amz-..."
+                  url: "https://storage.qtsurfer.com/00000000-.../uploads/up_1a2b3c4d5e6f7a8b/raw.csv?..."
                   expiresInMinutes: 15
         '400':
           description: Invalid request, or `instrument` is not a plain spot pair
@@ -2334,7 +2334,7 @@ paths:
                 rows: 86400
                 gaps: 0
                 largestGapSteps: 0
-                dataUrl: "https://storage.qtsurfer.com/00000000-.../ds_3f9a1c2e7b0d4a5f/dsv_8e2b4f19c6a03d7e/ticker_BTC_USDT_1700000000000_1700086400000_1m.lastra?X-Amz-..."
+                dataUrl: "https://storage.qtsurfer.com/00000000-.../ds_3f9a1c2e7b0d4a5f/dsv_8e2b4f19c6a03d7e/ticker_BTC_USDT_1700000000000_1700086400000_1m.lastra?..."
                 dataFormat: "lastra"
                 _links:
                   self:
@@ -2356,8 +2356,8 @@ paths:
       summary: Delete a dataset
       description: |
         Soft-delete — the dataset stops appearing in `GET /datasets`/`GET /datasets/{datasetId}` and
-        can no longer be prepared from, but its object data is reclaimed later rather than purged
-        inline, so a backtest already running against one of its versions is not disrupted.
+        can no longer be prepared from, but its data is not removed at once, so a backtest already
+        running against one of its versions is not disrupted.
       parameters:
         - name: datasetId
           in: path
@@ -2426,7 +2426,7 @@ paths:
               example:
                 uploadId: "up_1a2b3c4d5e6f7a8b"
                 upload:
-                  url: "https://storage.qtsurfer.com/00000000-.../uploads/up_1a2b3c4d5e6f7a8b/raw.csv?X-Amz-..."
+                  url: "https://storage.qtsurfer.com/00000000-.../uploads/up_1a2b3c4d5e6f7a8b/raw.csv?..."
                   expiresInMinutes: 15
         '403':
           $ref: '#/components/responses/InsufficientScope'
@@ -2560,7 +2560,7 @@ paths:
                   timestampUnit: "iso"
                   gaps: 0
                   largestGapSteps: 0
-                  dataUrl: "https://storage.qtsurfer.com/00000000-.../ds_3f9a1c2e7b0d4a5f/dsv_8e2b4f19c6a03d7e/ticker_BTC_USDT_1700000000000_1700086400000_1m.lastra?X-Amz-..."
+                  dataUrl: "https://storage.qtsurfer.com/00000000-.../ds_3f9a1c2e7b0d4a5f/dsv_8e2b4f19c6a03d7e/ticker_BTC_USDT_1700000000000_1700086400000_1m.lastra?..."
                   dataFormat: "lastra"
         '403':
           $ref: '#/components/responses/InsufficientScope'
@@ -2754,7 +2754,7 @@ paths:
 
             For `type: cex`: no `cex` block, or its `exchange` is not a centralized exchange of
             `GET /exchanges` (a decentralized one is `400` too — use `type: dex`), `segment` is not
-            `spot` (the only segment a `cex` import takes today), `dataType` is not `ticker` or
+            `spot` (the segment a `cex` import takes), `dataType` is not `ticker` or
             `klines`, or
             `cadence` is not one of the values a `cex` import takes (see `DatasetImportRequest`).
             Whether the range holds data, and whether it holds data fine enough for the `cadence`
@@ -2857,7 +2857,7 @@ paths:
                   timestampUnit: "us"
                   gaps: 0
                   largestGapSteps: 0
-                  dataUrl: "https://storage.qtsurfer.com/00000000-.../ds_3f9a1c2e7b0d4a5f/dsv_8e2b4f19c6a03d7e/ticker_WETH_USDC_....lastra?X-Amz-..."
+                  dataUrl: "https://storage.qtsurfer.com/00000000-.../ds_3f9a1c2e7b0d4a5f/dsv_8e2b4f19c6a03d7e/ticker_WETH_USDC_....lastra?..."
                   dataFormat: "lastra"
         '403':
           $ref: '#/components/responses/InsufficientScope'
@@ -2899,8 +2899,7 @@ paths:
 
         `sources` takes one entry, or none: a start with no `sources` makes a run that waits for a source (see `POST /live/{runId}/attachments`).
         `type` is `ticker` or `kline`; anything else is rejected. Both connect to the lightest
-        (fastest) cadence available for the exchange — today that is 1 tick/second on every
-        supported exchange; choosing among several cadences is not offered yet.
+        (fastest) cadence available for the exchange; choosing among several cadences is not offered.
 
         `venueType` is `cex` (a centralized exchange) or `dex` (one pool on a decentralized exchange). A `dex` source reads one
         pool, takes only `kline`, and needs the pool's address as its single instrument. See the "Live execution" guide,
@@ -2938,8 +2937,7 @@ paths:
         **Warming up.** Pass `warmFrom` to choose how many seconds before its start the run replays the market
         feed from, so that its indicators and windows have history when the first live tick arrives. `0` replays
         nothing: the run delivers its first signal as soon as it is running, but its indicators start empty and the
-        first bar of a window can be partial. Omitted, the platform replays from the start of the current 15-minute
-        block, which is between 0 and 900 seconds before the run's start, so the first bar of a 15-minute window is
+        first bar of a window can be partial. Omitted, the platform chooses how far back to replay, so that the first bar of the usual windows is
         complete. The value in effect, yours or the platform's, comes back as `warmFrom`. It can be set only here,
         when the run is started. See the "Live execution" guide, "Warming up".
 
@@ -3090,7 +3088,7 @@ paths:
         with a `stream`, `streamUrl` is here too while the run is running and your plan allows it.
 
         While the run is being executed it also carries `stats`, the run's latest counters (updates
-        processed, rate, instruments seen), refreshed about once a minute. Starting or stopping a run
+        processed, rate, instruments seen), refreshed periodically. Starting or stopping a run
         does not return them; read them here.
       parameters:
         - name: strategyId
@@ -3469,8 +3467,8 @@ paths:
         implements the engine's `CommandRequestHandler`. Owner only.
 
         A command is an event, not a stored setting: it is delivered once to every execution behind the run, at
-        the same market position, and nothing about it is written to the run's state. **It is transient** — a
-        replica that restarts replays only its recent market history, so a command from before that only reaches
+        the same market position, and nothing about it is written to the run's state. **It is transient** — it is
+        not replayed when an execution restarts, so a command from before that only reaches
         one that was already running when it arrived. Anything the strategy needs to remember across a restart
         belongs in a parameter (`PUT /live/{runId}/params`), which does have a stored value; a command does not.
 
@@ -3704,7 +3702,7 @@ paths:
       summary: Rotate a run's stream URL
       description: |
         Gives a run a **new** stream URL and retires the old one: connections open on the old URL are closed
-        within about 15 seconds and the old URL answers `404` from then on. Use it when the URL may have leaked.
+        shortly afterwards and the old URL answers `404` from then on. Use it when the URL may have leaked.
         Owner only, and only for a run that is running and was started with `stream: true` (the URL cannot be added
         to a run later, and a revoked one cannot be brought back). The plan is checked again: a plan that may not
         broadcast gets `429`.
@@ -3758,7 +3756,7 @@ paths:
       operationId: revokeLiveStream
       summary: Revoke a run's stream URL
       description: |
-        Revokes a run's stream URL **for good**: connections open on it are closed within about 15 seconds and it
+        Revokes a run's stream URL **for good**: connections open on it are closed shortly afterwards and it
         answers `404` from then on. The run itself is not touched, and a stream cannot be added to it again; start
         the run again with `stream: true` for a new URL. Owner only, and always allowed, whatever your plan or the
         run's state. Repeating it is not an error.
@@ -3939,7 +3937,7 @@ paths:
 
         `equity` is the account's latest recorded value: at the last closed trade (`equityKind:
         equity`), or the last periodic mark-to-market while positions are open (`equityKind:
-        mark`, taken every minute of market time). Until either exists the account holds its
+        mark`, taken periodically). Until either exists the account holds its
         starting capital.
 
         A run started with `accounts: instrument` has one account per instrument instead: each
@@ -3949,7 +3947,7 @@ paths:
         A position also says what it is worth. When the last mark valued it as it stands now, its
         entry in `openPositions` carries `markPrice` (the price it was valued at), `markedAtMs`
         (when) and `unrealisedPnl` (`base` times `markPrice`, minus `cost`). A position opened or
-        changed since the last mark, which is at most about a minute old, has none of the three yet.
+        changed since the last mark has none of the three yet.
         The account says it for all its positions together: `unrealisedPnl` (their sum, `0` when it
         holds nothing) and `totalPnl` (with its `realisedPnl`); both are absent while any of its
         positions has no current mark.
@@ -4067,8 +4065,8 @@ paths:
         parameters, with the account's `currency` and its `gaps` alongside. The curve is kept for
         the life of the run, so unlike signals it has no moving window.
 
-        It is one series of running equity: the value after every closed trade and, every minute
-        of market time while positions are open, the value marked to market. Where the run was
+        It is one series of running equity: the value after every closed trade and, periodically
+        while positions are open, the value marked to market. Where the run was
         restarted with positions open, those positions are not carried over, so the curve has no
         value there: that moment is listed in `gaps` and is not a point of the curve.
 
@@ -5640,7 +5638,7 @@ components:
         updatedAt:
           type: string
           format: date-time
-          description: When this listing was last refreshed. It is refreshed every hour for `robinhood` and every 12 hours for `solana`, and the `lastPrice` of each pool is as of this time.
+          description: When this listing was last refreshed. The `lastPrice` of each pool is as of this time.
           example: "2026-10-14T22:32:34Z"
         exchange:
           type: string
@@ -5727,7 +5725,7 @@ components:
         lastPrice:
           type: number
           format: double
-          description: The price of one base token in the quote token, as the signals of a run on this pool name the pair. It is as of `meta.updatedAt`, so as old as the listing's refresh interval (one hour for `robinhood`, 12 hours for `solana`). Absent when there is no price for the pool.
+          description: The price of one base token in the quote token, as the signals of a run on this pool name the pair. It is as of `meta.updatedAt`. Absent when there is no price for the pool.
           example: 2411.285967
         volume24h:
           type: number
@@ -6155,7 +6153,7 @@ components:
           type: string
           description: |
             Output bar cadence for the prepared range. Coarser cadences are produced on demand by
-            resampling the source and stored alongside the native blob in cache. A target finer
+            resampling the source and kept for later requests. A target finer
             than the source, or not an exact multiple of it, returns `400`. What's accepted, and
             what omitting it means, depends on the source:
 
@@ -6194,11 +6192,8 @@ components:
           contextId:
             type: string
             description: >-
-              Identifier for the job's execution context. Its current shape is a colon-delimited
-              string encoding the data source type, an internal user id, the exchange, the job
-              id, and the instrument — but that structure is not a committed contract and may
-              change without notice. Treat it as an opaque token: store and pass it back, don't
-              parse it.
+              Identifier for the job's execution context. It is an opaque token whose shape may
+              change without notice: store and pass it back, don't parse it.
             example: "jctx:ticker:00000000-0000-0000-0000-000000000000:binance:5ikyamio8b3v9wcnfxztzg:btc/usdt:0vicnz3thzhrqvfczks1pu"
           status:
             type: string
@@ -6336,8 +6331,8 @@ components:
                   expected:
                     type: integer
                     description: |
-                      Expected row count for the hour (currently always 0; reserved for
-                      future use). The rationale never depends on it.
+                      Expected row count for the hour (always 0; reserved).
+                      The rationale never depends on it.
                     example: 0
                   rationale:
                     type: string
@@ -6654,15 +6649,15 @@ components:
         retrying:
           type: integer
           description: >-
-            Units whose last attempt failed on something transient — an I/O error, a worker that
-            died mid-read — and which are queued to be attempted again. Not counted as failures,
+            Units whose last attempt failed on something transient — an I/O error, for example —
+            and which are queued to be attempted again. Not counted as failures,
             because they have not failed yet; a sweep with a non-zero value here is still expected
             to complete.
         notStarted:
           type: integer
           description: >-
-            Units that have not reported anything yet. Covers both work still queued behind other
-            work and work claimed by a worker that stopped before it began, which is why a sweep
+            Units that have not reported anything yet. Covers both work still waiting behind other
+            work and work that stopped before it began, which is why a sweep
             with a persistent value here and a rising `stalledSeconds` is worth looking at.
         stalledSeconds:
           type: integer
@@ -6675,9 +6670,8 @@ components:
           format: int64
           description: >-
             Rough seconds remaining, extrapolated from the rate observed so far and assuming
-            nothing else competes for workers. Runs conservative in practice — it has measured
-            2–5× long when a sweep spent part of its life waiting to be retried, since that wait
-            dilutes the observed rate. **Omitted, never zero, when it cannot be computed**: a sweep
+            nothing else competes for capacity. It can run long when a sweep spent part of its life
+            waiting to be retried, since that wait dilutes the observed rate. **Omitted, never zero, when it cannot be computed**: a sweep
             with nothing finished yet has no rate to extrapolate from, and a zero would read as
             "about to finish". Excludes queue wait entirely; `retrying` and `stalledSeconds` are
             where that shows up.
@@ -6790,13 +6784,13 @@ components:
             this object is present on rows that carry only a pointer, and `url` stays present
             alongside an inline curve so a caller can still re-request a different transform. An
             inline curve is emitted on the materialisation view (`?order=natural`), where each row
-            is read once; the ranked view keeps the pointer, being polled.
+            is read once; the ranked view keeps the pointer.
 
             When only a pointer is present, `GET` the `url` for the curve. Its own `meta` there is
             the real, possibly size-guarded outcome. This outer `meta` may be a declaration rather
             than a measurement — for a row whose curve was not promoted, the point count is derived
             from the trade count (one equity point per closed trade) instead of being read from the
-            store, to keep a polled response from doing per-row work.
+            store.
     SweepSensitivity:
       type: object
       description: >-
@@ -6974,8 +6968,7 @@ components:
             single job's non-terminal `Partial`, which has no equivalent here at all.
 
             `state.completed` is real ticks processed on a plain sweep. On a `walkForward` sweep it
-            is currently always `0` — the walk-forward fold runner was not wired to count ticks
-            when this shipped, unlike the plain shard path.
+            is always `0`: ticks are not counted there.
 
             `state.size` is an upfront estimate — range x the prepare's target cadence, set
             before any data is even loaded, not a query against loaded data — on a single execute
@@ -7123,7 +7116,7 @@ components:
       properties:
         hostName:
           type: string
-          description: Identifier of the worker that executed the strategy. Useful when reporting issues so support can correlate with logs.
+          description: Identifier of what executed the strategy. Quote it when you report an issue.
           example: "executor10"
         iops:
           type: number
@@ -7220,7 +7213,7 @@ components:
             `SHORT` mode) is an anchor at the backtest `from` with `initialCapital`; the remaining
             points are one sample per emitted yield, in order. Use it to plot the strategy's
             running equity without re-deriving it from the yield history. Always inline for a
-            plain backtest today — never a pointer (`url`); that shape exists only for a sweep
+            plain backtest — never a pointer (`url`); that shape exists only for a sweep
             row's top-N winners.
           example:
             points:
@@ -7753,10 +7746,10 @@ components:
               description: |
                 Presigned GET URL to the current version's stored file — see `dataFormat` for
                 which format it's actually in. Present only once the current version's status is
-                `ready`. Long-lived (day-scale, not permanent): a DuckDB-WASM/`lastra-ts`-style
-                reader issues HTTP range requests against it lazily over an extended viewing
-                session, not in one shot like a browser upload.
-              example: "https://storage.qtsurfer.com/00000000-.../ds_3f9a1c2e7b0d4a5f/dsv_8e2b4f19c6a03d7e/ticker_BTC_USDT_1700000000000_1700086400000_1m.lastra?X-Amz-..."
+                `ready`. It is time-limited, so read the dataset again for a fresh one. It is meant to
+                last through a viewing session in which a DuckDB-WASM/`lastra-ts`-style reader issues
+                HTTP range requests against it lazily, not just one shot like a browser upload.
+              example: "https://storage.qtsurfer.com/00000000-.../ds_3f9a1c2e7b0d4a5f/dsv_8e2b4f19c6a03d7e/ticker_BTC_USDT_1700000000000_1700086400000_1m.lastra?..."
             dataFormat:
               type: string
               enum: [lastra, parquet]
@@ -7764,8 +7757,8 @@ components:
                 Which format `dataUrl` is actually in — check this rather than assuming it
                 matches how you uploaded it. `lastra` — our native columnar format — for a CSV (or
                 gzip/zip of one) upload, always converted on ingest, or for a lastra upload,
-                stored as-is (the value alone doesn't tell you which). `parquet` for a parquet
-                upload, also stored as-is today.
+                stored as it is (the value alone doesn't tell you which). `parquet` for a parquet
+                upload, also stored as it is.
               example: "lastra"
             _links:
               type: object
@@ -7787,7 +7780,7 @@ components:
             Presigned URL. `PUT` the file here directly — the CSV or parquet itself, or a `.gz`/`.zip` of it
             (see `createDataset`'s own description) — no `Authorization` header, no other API
             credentials.
-          example: "https://storage.qtsurfer.com/uploads/00000000-.../up_1a2b3c4d5e6f7a8b/raw.csv?X-Amz-..."
+          example: "https://storage.qtsurfer.com/uploads/00000000-.../up_1a2b3c4d5e6f7a8b/raw.csv?..."
         expiresInMinutes:
           type: integer
           description: How long `url` stays valid.
@@ -7892,10 +7885,10 @@ components:
           type: string
           description: |
             Presigned GET URL to the stored file — see `dataFormat` for which format it's in.
-            Present once the version is `ready`. Long-lived (day-scale, not permanent): a
-            DuckDB-WASM/`lastra-ts`-style reader issues HTTP range requests against it lazily over
-            an extended viewing session, not in one shot like a browser upload.
-          example: "https://storage.qtsurfer.com/00000000-.../ds_3f9a1c2e7b0d4a5f/dsv_8e2b4f19c6a03d7e/ticker_BTC_USDT_1700000000000_1700086400000_1m.lastra?X-Amz-..."
+            Present once the version is `ready`. It is time-limited, so read the dataset again for a fresh
+            one. It is meant to last through a viewing session in which a DuckDB-WASM/`lastra-ts`-style
+            reader issues HTTP range requests against it lazily, not just one shot like a browser upload.
+          example: "https://storage.qtsurfer.com/00000000-.../ds_3f9a1c2e7b0d4a5f/dsv_8e2b4f19c6a03d7e/ticker_BTC_USDT_1700000000000_1700086400000_1m.lastra?..."
         dataFormat:
           type: string
           enum: [lastra, parquet]
@@ -7904,7 +7897,7 @@ components:
             how you uploaded it. `lastra` — our native columnar format — for a CSV (or gzip/zip
             of one) upload, always converted on ingest, or for a lastra upload, stored as-is
             (the value alone doesn't tell you which). `parquet` for a parquet upload, also
-            stored as-is today.
+            stored as it is.
           example: "lastra"
     DatasetUploadState:
       type: object
@@ -7923,7 +7916,7 @@ components:
           description: |
             * `uploading` — the file was PUT to the presigned URL, but `finalize` has not been
               called yet.
-            * `ingesting` — `finalize` was called; the worker is parsing and validating the file.
+            * `ingesting` — `finalize` was called; the file is being parsed and validated.
             * `ready` — ingested successfully. `version` carries the result.
             * `failed` — ingest rejected the file (e.g. bad CSV contract, mixed timestamp units, a
               `.zip` with no file inside or more than one).
@@ -8100,8 +8093,8 @@ components:
           type: string
           enum: [spot]
           description: |
-            The market segment, one of the exchange's `segments`. `spot` is the only segment a
-            `cex` import takes today, which matches `instrument` being a plain spot pair.
+            The market segment, one of the exchange's `segments`. `spot` is the segment a
+            `cex` import takes, which matches `instrument` being a plain spot pair.
           example: "spot"
         dataType:
           type: string
@@ -8163,7 +8156,7 @@ components:
           description: |
             * `fetching` — reading from the source; nothing staged yet.
             * `ingesting` — fetch complete, staged, and re-entered the same ingest chain an
-              upload uses; the worker is parsing and validating it.
+              upload uses; the file is being parsed and validated.
             * `ready` — ingested successfully. `version` carries the result.
             * `failed` — the fetch or the ingest that followed it was rejected. `error` names why.
           example: "ready"
@@ -8287,7 +8280,7 @@ components:
         exchange:
           type: string
           example: binance
-          description: The exchange id, as `GET /exchanges` lists it. For a `dex` source, the chain the pool is on; `robinhood` is the only one today.
+          description: The exchange id, as `GET /exchanges` lists it. For a `dex` source, the chain the pool is on, for example `robinhood`.
         segment:
           type: string
           example: spot
@@ -8295,7 +8288,7 @@ components:
         type:
           type: string
           enum: [ticker, kline]
-          description: 'Both `ticker` and `kline` connect to the lightest (fastest) cadence available for the exchange — today, 1 tick/second on every supported exchange. Choosing a specific cadence is not offered yet. A `dex` source supports only `kline`: one candle per second of the pool''s trades.'
+          description: 'Both `ticker` and `kline` connect to the lightest (fastest) cadence available for the exchange. Choosing a specific cadence is not offered. A `dex` source supports only `kline`: one candle per second of the pool''s trades.'
         instruments:
           type: array
           items:
@@ -8323,7 +8316,7 @@ components:
         exchange:
           type: string
           example: binance
-          description: The exchange id, as `GET /exchanges` lists it. For a `dex` source, the chain the pool is on; `robinhood` is the only one today.
+          description: The exchange id, as `GET /exchanges` lists it. For a `dex` source, the chain the pool is on, for example `robinhood`.
         segment:
           type: string
           example: spot
@@ -8331,7 +8324,7 @@ components:
         type:
           type: string
           enum: [ticker, kline]
-          description: 'Both `ticker` and `kline` connect to the lightest (fastest) cadence available for the exchange — today, 1 tick/second on every supported exchange. Choosing a specific cadence is not offered yet. A `dex` source supports only `kline`: one candle per second of the pool''s trades.'
+          description: 'Both `ticker` and `kline` connect to the lightest (fastest) cadence available for the exchange. Choosing a specific cadence is not offered. A `dex` source supports only `kline`: one candle per second of the pool''s trades.'
         instruments:
           type: array
           items:
@@ -8461,9 +8454,8 @@ components:
             How many seconds before the run's start to replay the market feed from, so the strategy's indicators and
             windows have history when its first live tick arrives. `0` replays nothing: the run delivers its first
             signal as soon as it is running, but its indicators start empty and the first bar of a window can be
-            partial. Omitted, the platform replays from the start of the current 15-minute block: between 0 and 900
-            seconds before the run's start, depending on when it starts (0 if it starts exactly on a quarter hour),
-            so the first bar of a 15-minute window is complete. The value in effect, the one you sent or the one the
+            partial. Omitted, the platform chooses how far back to replay,
+            so that the first bar of the usual windows is complete. The value in effect, the one you sent or the one the
             platform chose, is reported back as `warmFrom` on the run. Signals about the replayed time
             are not pushed on the run's channel or stream: they describe events from before the run started.
             It can be set **only when the run is started**: it is not a parameter of `PUT /live/{runId}/params`, and
@@ -8618,7 +8610,7 @@ components:
           description: 'A new run starts `SANDBOX`, a trial of `sandboxMinutes` minutes at least, and never more than 24 hours, in which it is compared against a second execution and checked for resource use and stability. A run that passes moves to `LIVE` automatically when the trial is over. A run of a strategy that an earlier run of yours already took through the trial starts `LIVE`, unless you started it with `sandbox: true`.'
         state:
           type: string
-          description: 'The run''s health right now: `STARTING` (no runner has reported on it yet), `WAITING` (running with no market-data source attached: it holds no place on the platform until you attach one), `RUNNING`, `LAGGING` (behind the market data, usually while catching up; clears by itself), `HUNG` (stuck inside one strategy call for longer than allowed; clears when it returns), `DEGRADED` (its independent executions produced different signals), `FAILED` (refused, could not start or failed while running; `reason` says why) or `STOPPED`. `LAGGING`, `HUNG` and `DEGRADED` come and go on a running run. The set may grow: read an unknown value as a running run with something to look at. See the Live execution guide.'
+          description: 'The run''s health right now: `STARTING` (the platform has not reported on it yet), `WAITING` (running with no market-data source attached: it holds no place on the platform until you attach one), `RUNNING`, `LAGGING` (behind the market data, usually while catching up; clears by itself), `HUNG` (stuck inside one strategy call for longer than allowed; clears when it returns), `DEGRADED` (its independent executions produced different signals), `FAILED` (refused, could not start or failed while running; `reason` says why) or `STOPPED`. `LAGGING`, `HUNG` and `DEGRADED` come and go on a running run. The set may grow: read an unknown value as a running run with something to look at. See the Live execution guide.'
         desired:
           type: string
           enum: [RUNNING, STOPPED]
@@ -8681,7 +8673,7 @@ components:
       type: object
       required: [processed, opsPerSecond, instrumentsSeen, asOfMs, stale]
       description: |
-        What a run has been doing, as of its last snapshot. The platform refreshes it about once a minute
+        What a run has been doing, as of its last snapshot. The platform refreshes it periodically
         while the run is being executed, so `opsPerSecond` is an average over that interval, not an
         instantaneous rate.
       properties:
@@ -8710,7 +8702,7 @@ components:
           type: boolean
           description: |
             `true` when the run is meant to be running (`desired` is `RUNNING`) and its counters have not
-            been refreshed for several refresh intervals: the platform has stopped updating them, which is
+            been refreshed for much longer than they usually are: the platform has stopped updating them, which is
             worth checking against `state`. `false` otherwise. A run whose `processed` is flat is not stale;
             `progressedAtMs` is how to tell it apart.
     WarmFrom:
@@ -8719,8 +8711,7 @@ components:
       maximum: 3600
       description: >-
         The `warmFrom` in effect for this run, in seconds: the one requested when the run was started or, when none was,
-        the one the platform chose (the distance from the run's start back to the start of the current 15-minute block,
-        0 to 900). It is never `null`. It is present on every run started since the field exists and absent from a run
+        the one the platform chose. It is never `null`. It is present on every run started since the field exists and absent from a run
         started before it existed. It never changes while the run exists.
     SandboxMinutes:
       type: integer
@@ -8833,7 +8824,7 @@ components:
           description: 'A new run starts `SANDBOX`, a trial of `sandboxMinutes` minutes at least, and never more than 24 hours, in which it is compared against a second execution and checked for resource use and stability. A run that passes moves to `LIVE` automatically when the trial is over. A run of a strategy that an earlier run of yours already took through the trial starts `LIVE`, unless you started it with `sandbox: true`.'
         state:
           type: string
-          description: 'The run''s health right now: `STARTING` (no runner has reported on it yet), `WAITING` (running with no market-data source attached: it holds no place on the platform until you attach one), `RUNNING`, `LAGGING` (behind the market data, usually while catching up; clears by itself), `HUNG` (stuck inside one strategy call for longer than allowed; clears when it returns), `DEGRADED` (its independent executions produced different signals), `FAILED` (refused, could not start or failed while running; `reason` says why) or `STOPPED`. `LAGGING`, `HUNG` and `DEGRADED` come and go on a running run. The set may grow: read an unknown value as a running run with something to look at. See the Live execution guide.'
+          description: 'The run''s health right now: `STARTING` (the platform has not reported on it yet), `WAITING` (running with no market-data source attached: it holds no place on the platform until you attach one), `RUNNING`, `LAGGING` (behind the market data, usually while catching up; clears by itself), `HUNG` (stuck inside one strategy call for longer than allowed; clears when it returns), `DEGRADED` (its independent executions produced different signals), `FAILED` (refused, could not start or failed while running; `reason` says why) or `STOPPED`. `LAGGING`, `HUNG` and `DEGRADED` come and go on a running run. The set may grow: read an unknown value as a running run with something to look at. See the Live execution guide.'
         desired:
           type: string
           enum: [RUNNING, STOPPED]
@@ -9870,7 +9861,7 @@ tags:
       capture itself: your own exports, a venue not yet integrated, or a private feed.
 
       **Key functionalities**:
-      - Create a dataset and get a presigned URL to upload a CSV or parquet file directly to object storage.
+      - Create a dataset and get a presigned URL to upload a CSV or parquet file directly.
       - Finalize an upload to trigger validated ingest (column contract check, cadence and timestamp
         unit discovery, gap detection) and poll its result.
       - List and inspect your datasets, including their current ingested version.

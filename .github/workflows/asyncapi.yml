@@ -18,8 +18,7 @@ on:
 
 jobs:
   validate:
-    # Same single-host guard as openapi_lint.yml: this repository is mirrored and both hosts read
-    # .github/workflows, so the check runs on GitHub alone.
+    # Same single-host guard as openapi_lint.yml: the check runs on GitHub alone.
     if: github.server_url == 'https://github.com'
     runs-on: ubuntu-latest
     steps:

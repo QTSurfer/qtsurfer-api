@@ -192,7 +192,7 @@ touched.
 | Layer | Technology |
 |-------|-----------|
 | Strategy runtime | Java (QTScript compiles to it) |
-| Signal storage | Apache Parquet, S3-compatible object storage |
+| Signal storage | Apache Parquet |
 | Visualization | [svelte-timeseries](https://github.com/QTSurfer/svelte-timeseries) (DuckDB-WASM + ECharts) |
 
 ## Data Sources
@@ -203,7 +203,7 @@ The `{type}` of the `/backtest/{exchange}/{type}/...` paths:
 |------|-------------|-----------|
 | `ticker` | Real-time bid/ask/last/volume | prepare, execute, sweep |
 | `kline` | Candlestick OHLCV, at the `cadence` you prepare the data at | prepare, execute, sweep |
-| `funding` | Funding rates (futures) | prepare only, for now |
+| `funding` | Funding rates (futures) | prepare only |
 
 See [Backtests](docs/backtest_execute.md#data-sources) for what each one can run.
 

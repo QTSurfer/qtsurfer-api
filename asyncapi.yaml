@@ -128,7 +128,7 @@ operations:
     title: Read the signals a run's channel still holds
     summary: >-
       Allowed on a channel you are subscribed to; otherwise error 103. The channel keeps the most
-      recent signals of the run's `sandbox` stage for a few minutes and nothing of its `live`
+      recent signals of the run's `sandbox` stage for a limited time and nothing of its `live`
       stage. A position (`since`) from a sequence the channel no longer has is error 112.
     channel:
       $ref: '#/channels/connection'
@@ -566,8 +566,8 @@ components:
               type: integer
               minimum: 0
               description: >-
-                How many signals to return, oldest first. The channel keeps at most 300, so `300`
-                reads everything it holds. With `0` the reply carries no signals, only the position
+                How many signals to return, oldest first. The channel keeps a limited number of recent
+                signals, so a large `limit` reads everything it holds. With `0` the reply carries no signals, only the position
                 (`epoch` and `offset`).
             since:
               type: object

@@ -98,7 +98,7 @@ curl https://api.qtsurfer.net/v1/account/usage \
 `maxTotalStorageBytes` is checked when you add new dataset bytes — `POST /datasets/{datasetId}/uploads/{uploadId}/finalize`
 and `POST /datasets/imports` both return `429` if your account is already at or over the limit (see
 [Datasets](datasets.md) for the exact wording). Strategy-execution signals and registered
-strategies are reported in `storageBytesUsed` but do not themselves trigger a `429` today — delete
+strategies are reported in `storageBytesUsed` but do not themselves trigger a `429` — delete
 a dataset to free space if you're at your limit.
 
 ## Related guides

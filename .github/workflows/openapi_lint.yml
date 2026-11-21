@@ -16,8 +16,7 @@ on:
 
 jobs:
   lint:
-    # This repository is mirrored, and the other host's CI also reads .github/workflows,
-    # so the check runs on GitHub alone.
+    # The check runs on GitHub alone.
     if: github.server_url == 'https://github.com'
     runs-on: ubuntu-latest
     steps:

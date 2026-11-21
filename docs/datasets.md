@@ -49,7 +49,7 @@ relevant lifecycle stages.
   "type": "ticker", "instrument": "BTC/USDT",
   "uploadId": "up_1a2b3c4d5e6f7a8b",
   "upload": {
-    "url": "https://storage.qtsurfer.com/.../uploads/up_1a2b3c4d5e6f7a8b/raw.csv?X-Amz-...",
+    "url": "https://storage.qtsurfer.com/.../uploads/up_1a2b3c4d5e6f7a8b/raw.csv?...",
     "expiresInMinutes": 15
   }
 }
@@ -89,7 +89,7 @@ metadata around it:
 {
   "uploadId": "up_1a2b3c4d5e6f7a8b",
   "upload": {
-    "url": "https://storage.qtsurfer.com/.../uploads/up_1a2b3c4d5e6f7a8b/raw.csv?X-Amz-...",
+    "url": "https://storage.qtsurfer.com/.../uploads/up_1a2b3c4d5e6f7a8b/raw.csv?...",
     "expiresInMinutes": 15
   }
 }
@@ -111,7 +111,7 @@ close series present. **Cadence and timestamp unit are discovered from the data,
 for all three.
 
 A CSV upload is converted to our native columnar format (`lastra`) for storage. A parquet or
-lastra upload is stored as-is today. Either way, check `dataFormat` on the [ready
+lastra upload is stored as it is. Either way, check `dataFormat` on the [ready
 version](#datasetversion--one-successfully-ingested-upload) for which one you actually get back —
 don't assume it from how you uploaded it (a converted CSV and an uploaded lastra file both report
 `dataFormat: "lastra"`).
@@ -214,7 +214,7 @@ case below).
 
 | Field | Notes |
 |---|---|
-| `status` | `uploading` (file `PUT`, not finalized yet) → `ingesting` (finalize called, worker parsing/validating) → `ready` (`version` carries the result) \| `failed` (e.g. bad CSV contract, a [timestamp](#the-timestamp-column) in none of the accepted forms, mixed timestamp units, a `.zip` with no file inside or more than one) |
+| `status` | `uploading` (file `PUT`, not finalized yet) → `ingesting` (finalize called, the file is being parsed and validated) → `ready` (`version` carries the result) \| `failed` (e.g. bad CSV contract, a [timestamp](#the-timestamp-column) in none of the accepted forms, mixed timestamp units, a `.zip` with no file inside or more than one) |
 | `jobId` | the ingest job id, while `status` is `ingesting` |
 | `error` | human-readable reason, present when `status` is `failed`. Durably recorded alongside the failure — stays available however long after the fact you poll |
 | `version` | a [`DatasetVersion`](#datasetversion--one-successfully-ingested-upload), present when `status` is `ready` or `failed` |
@@ -245,7 +245,7 @@ curl https://api.qtsurfer.net/v1/datasets/$DATASET_ID/uploads/$UPLOAD_ID \
     "datasetId": "ds_3f9a1c2e7b0d4a5f", "id": "dsv_8e2b4f19c6a03d7e",
     "bytes": 4831022, "rows": 86400, "cadence": "1s",
     "timestampUnit": "iso", "gaps": 0, "largestGapSteps": 0,
-    "dataUrl": "https://storage.qtsurfer.com/.../dsv_8e2b4f19c6a03d7e/ticker_BTC_USDT_....lastra?X-Amz-...",
+    "dataUrl": "https://storage.qtsurfer.com/.../dsv_8e2b4f19c6a03d7e/ticker_BTC_USDT_....lastra?...",
     "dataFormat": "lastra"
   }
 }
@@ -295,7 +295,7 @@ A `dex` import has two data shapes:
 | `cadence` | string | optional, the same labels as a preparation (`1s` to `1q`; any other value is `400`); one your plan does not include is `402`. For `dex`: candles at that width on a network that supports it; omitted/blank = the plan's default, or native per-trade cadence on a plan that includes the native rate (see below). For `cex`: see [Importing an exchange's history](#importing-an-exchanges-history) |
 | `type` | string | required, `"dex"` \| `"cex"` |
 | `dex.network` | string | required, one of `ethereum` \| `robinhood` \| `solana`. `solana` has candles only (see below) |
-| `dex.id` | string | required only for the per-trade import (no `cadence`, on a plan that includes the native rate); ignored when candles are built. `"uniswap"` is the only value today — which on-chain DEX protocol `dex.contract` implements |
+| `dex.id` | string | required only for the per-trade import (no `cadence`, on a plan that includes the native rate); ignored when candles are built. Which on-chain DEX protocol `dex.contract` implements, for example `"uniswap"` |
 | `dex.version` | string | required only for the per-trade import (no `cadence`, on a plan that includes the native rate); ignored when candles are built. `"v2"` \| `"v3"` |
 | `dex.contract` | string | required, the pool (v3) or pair (v2) contract address |
 | `dex.factory` | string | optional — omit to auto-discover on-chain from `contract`; supply only if you already know it or the pool/pair belongs to a non-canonical factory. Either way the pool/pair is validated against whichever factory is used before anything is fetched. Ignored if a candle `cadence` actually resolves (see below) |
@@ -308,7 +308,7 @@ one from on-chain data. Any other plan gets candles at its default instead, and 
 that asks for a `cadence`: the bars are built at that width directly — but only on a network that actually has
 a candle source behind it. On any other network a plan that does not include per-trade data cannot
 be served and the request is `402`; on a plan that does, the `cadence` is ignored and the import
-proceeds as if it were never sent (native, `dex.id`/`dex.version` required). Which networks support candles today
+proceeds as if it were never sent (native, `dex.id`/`dex.version` required). Which networks support candles
 isn't part of this contract and may change.
 
 **Solana has candles only.** There is no per-trade import for a Solana pool, so there is no
@@ -317,8 +317,8 @@ plan, elite included (`1s`), and `dex.id`, `dex.version` and `dex.factory` are n
 cadence your plan includes can be asked for, and one it does not is `402`, as anywhere. The `dex.contract`
 of a Solana pool is its address in base58, which is case-sensitive: send it exactly as it is written.
 
-**Candles reach back 180 days.** A candle import — one that names a `cadence`, or that gets the plan's
-default — whose `from` is earlier than 180 days before the request is `400`, whatever the network; the
+**Candles reach back a limited time.** A candle import — one that names a `cadence`, or that gets the plan's
+default — whose `from` is earlier than the candle history an import can read is `400`, whatever the network; the
 message says the earliest instant it can read. It is refused up front rather than accepted and failed
 later. The window does not apply to a per-trade import or to a `cex` import.
 
@@ -391,7 +391,7 @@ has.
 
 Errors: `400` invalid request, `instrument` isn't a plain spot pair, `from >= to`, `cadence`
 present but not one of its supported values, a candle import whose `from` is earlier than the
-180 days candles reach back, the range exceeds your tier's import ceiling, the
+candle history an import can read, the range exceeds your tier's import ceiling, the
 range's rough size estimate exceeds your tier's row limit, `dex.network`/`dex.id` not one of their
 supported values, `dex.contract`/`dex.factory` fail basic shape validation, or (when `cadence` is
 omitted on a plan that includes the native rate) `dex.id`/`dex.version` missing (whether the pool/pair actually resolves, and for a candle
@@ -417,7 +417,7 @@ import changes:
 | Field | Type | Notes |
 |---|---|---|
 | `cex.exchange` | string | required, the `id` of a centralized exchange (`venueType` `cex`) of `GET /exchanges`, lower-case. A decentralized exchange's id is `400`: use `type: dex` |
-| `cex.segment` | string | required, one of the exchange's `segments`. `spot` is the only segment a `cex` import takes today, which matches `instrument` being a plain spot pair |
+| `cex.segment` | string | required, one of the exchange's `segments`. `spot` is the segment a `cex` import takes, which matches `instrument` being a plain spot pair |
 | `cex.dataType` | string | required, `"ticker"` \| `"klines"`. What is fetched, and so the resulting dataset's `type` ([What `type` is](#what-type-is): the tickers carry the book, the klines do not) |
 
 `cadence` is optional, and takes the same labels as the cadence of a backtest preparation, for
@@ -467,7 +467,7 @@ anything is even staged; once fetched, it re-enters the exact same ingest chain 
 
 | Field | Notes |
 |---|---|
-| `status` | `fetching` (reading from the source, nothing staged yet — the one status only an import ever reports) → `ingesting` (fetched, staged, worker parsing/validating) → `ready` (`version` carries the result) \| `failed` |
+| `status` | `fetching` (reading from the source, nothing staged yet — the one status only an import ever reports) → `ingesting` (fetched, staged, being parsed and validated) → `ready` (`version` carries the result) \| `failed` |
 | `jobId` | the fetch/ingest job id, while `status` is `fetching` or `ingesting` |
 | `error` | human-readable reason, present when `status` is `failed` — an unresolvable pool/pair, no data in the requested range, a range older than the source retains, a `cex` `cadence` finer than the range holds (the message names the finest one), the fetch exceeding your tier's time ceiling, or any of the ingest-side reasons `DatasetUploadState.error` can carry, once fetching hands off to that same chain. Durably recorded, same as on the upload path |
 | `version` | a [`DatasetVersion`](#datasetversion--one-successfully-ingested-upload), present when `status` is `ready` or `failed` |
@@ -485,7 +485,7 @@ curl https://api.qtsurfer.net/v1/datasets/$DATASET_ID/imports/$IMPORT_ID \
     "datasetId": "ds_3f9a1c2e7b0d4a5f", "id": "dsv_8e2b4f19c6a03d7e",
     "bytes": 4831022, "rows": 604800, "cadence": "rt",
     "timestampUnit": "us", "gaps": 0, "largestGapSteps": 0,
-    "dataUrl": "https://storage.qtsurfer.com/.../dsv_8e2b4f19c6a03d7e/ticker_WETH_USDC_....lastra?X-Amz-...",
+    "dataUrl": "https://storage.qtsurfer.com/.../dsv_8e2b4f19c6a03d7e/ticker_WETH_USDC_....lastra?...",
     "dataFormat": "lastra"
   }
 }
@@ -615,7 +615,7 @@ Errors: `404` no such dataset for this user.
 ## Deleting a dataset
 
 `DELETE /datasets/{datasetId}` — soft delete. Stops appearing in the list/get endpoints and can
-no longer be prepared from, but its object data is reclaimed later rather than purged inline, so
+no longer be prepared from, but its data is not removed at once, so
 a backtest already running against one of its versions isn't disrupted.
 
 ```bash

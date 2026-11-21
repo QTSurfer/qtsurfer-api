@@ -35,7 +35,7 @@ when the response has one, the top level when it does not.
 |---|---|---|---|
 | `ticker` | yes | yes | yes |
 | `kline` | yes | yes | yes |
-| `funding` | yes | not yet | not yet |
+| `funding` | yes | no | no |
 
 A `funding` request to `execute` or `executeSweep` is rejected with `400` before anything is
 queued, and the message names what can be run: `funding data can be prepared but not executed yet.
@@ -134,8 +134,8 @@ dataset's discovered cadence / a `kline` prepare over a dataset that isn't `klin
 your tier's limit · `402` `cadence` is not one of your plan's ([Cadences by plan](#cadences-by-plan)) —
 doesn't apply to `exchangeId: user` · `404` exchange/type not found, or
 (for `exchangeId: user`) `datasetId`/`datasetVersionId` doesn't exist or isn't yours · `429` global
-queue at capacity or too many active backtests — doesn't apply to `exchangeId: user`, which reads
-an already-ingested file rather than claiming worker capacity.
+platform at capacity or too many active backtests — doesn't apply to `exchangeId: user`, which reads
+an already-ingested file rather than using platform capacity.
 
 ## Polling prepare status
 
@@ -226,7 +226,7 @@ it to run at the platform defaults (`initialFunding: 100`, `feeRate: 0.001`).
 |---|---|---|
 | `prepareJobId` | string | required — must be a `Completed` prepare job |
 | `strategyId` | string | required |
-| `storeSignals` | boolean | default `false`. When `true`, the worker uploads emitted signals to object storage and the result gains `signalsUrl`/`signalsId` |
+| `storeSignals` | boolean | default `false`. When `true`, the emitted signals are stored and the result gains `signalsUrl`/`signalsId` |
 | `equityCurve` | [`EquityCurveOptions`](equity_curves.md#plain-backtests-choose-the-transform-on-submit) | optional — reshape the curve baked into `results.equityCurve` |
 | `baseConfig` | [`SweepBaseConfig`](backtest_sweep.md#baseconfig--sweepbaseconfig) | optional — capital/fee/position-size overrides, same shape `executeSweep` accepts. One effective fee rate: a value implying asymmetric buy/sell fees, or a non-default `feeLeg`, is `400` |
 | `params` | object | optional, at most 64 entries. Flat map of strategy property name → scalar (number, string or boolean). Keys are the `name` declared on `@StrategyProperty` (not necessarily the Java field it annotates) — `GET`/`POST /strategy` returns `declaredProperties` for the valid names. An unknown key fails the job rather than silently running at defaults. Omit a key to leave it at its default; `null` is not a value. Arrays are rejected — a list is a sweep axis, this endpoint runs exactly one vector. `strategyId`, `storeSignals`, `equityCurve`, `backtestEnabled`, `backtestFakeExecution` are reserved (they configure the job, not the strategy) |

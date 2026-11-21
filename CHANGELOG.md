@@ -7,15 +7,25 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ## [Unreleased]
 
+## [0.128.60] — 2026-11-21
+
+### Changed
+
+- The contract and the guides no longer state values that are settings of the platform or that change with it: how often a listing or the
+  counters of a run are refreshed, how many entries a listing holds and the least liquidity a listed pool has, waits and delays inside
+  the platform, how long a history is kept, how deep the history of a source reaches, which hours the download routes serve, how often the account of a
+  paper run is marked to market, how far back a run replays by default, or the names of internal components. They say what a
+  client can rely on and point to the field of the response that tells the current value (`meta.updatedAt`, `meta.limit`,
+  `meta.minTvlUsd`, `stats.asOfMs`). A capability that was described as the only one "today" now points to `GET /exchanges`, the list of
+  exchanges and segments. The earlier entries of this changelog that stated such values were edited the same way.
+
 ## [0.128.59] — 2026-11-21
 
 ### Added
 
 - The pools of Solana have a listing: `GET /exchange/solana/{segment}/instruments` answers, for each of its protocols (`orca`,
-  `raydium`, `raydium-clmm`, `meteora`, `pumpswap`), the pools worth running in the same shape as the listing of Robinhood Chain: up to
-  the 50 with most volume over the last 24 hours among those with at least 10,000 US dollars of liquidity, in `PoolDetail`, with
-  `meta.venueType: dex`. It is refreshed every 12 hours (`meta.updatedAt`), not every hour. A pair of two of USDC, USDT and SOL is named
-  after the first (`SOL/USDC`) and any other token against SOL is quoted in SOL (`pippin/SOL`). The pools are for importing as datasets
+  `raydium`, `raydium-clmm`, `meteora`, `pumpswap`), the pools worth running in the same shape as the listing of Robinhood Chain, in
+  `PoolDetail`, with `meta.venueType: dex`. It is refreshed periodically (`meta.updatedAt`). The pools are for importing as datasets
   and for backtesting: a live run cannot read a Solana pool yet (its segments are not in `liveSegments` of `GET /exchanges`).
   Guide: Market data ("Solana").
 
@@ -25,8 +35,7 @@ pre-1.0, its version follows the version in `openapi.yaml`.
   exactly as listed. On an EVM chain it stays `0x` and 40 hexadecimal digits in lower case.
 - `PoolDetail.feePercent` is no longer always present: it is left out when the source does not tell the pool's fee tier, which is the
   case of most pools of `solana`. Every pool of `robinhood` still carries it.
-- The refresh interval of a pool listing depends on the exchange (every hour for `robinhood`, every 12 hours for `solana`), and so does
-  how old a pool's `lastPrice` can be.
+
 ## [0.128.58] — 2026-11-20
 
 ### Added
@@ -168,7 +177,7 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 ### Changed
 
 - A candle import (one that names a `cadence`, or gets the plan's default) whose `from` is earlier than the history
-  candles reach back, 180 days, is `400` up front, on every network. It used to be accepted and fail afterwards as a
+  candles reach back is `400` up front, on every network. It used to be accepted and fail afterwards as a
   whole. A per-trade import and a `cex` import are not held to it. The candle examples of the guide and of the operation
   now use recent dates.
 - The guide and the operation say that the candles of a pool are not a contiguous grid: a width in which the pool had no
@@ -442,7 +451,7 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ### Fixed
 
-- The example hour of the hourly download routes (`2026-01-15T10`, in the description, the `hour` parameter's example and the guide's `curl`) is now `2026-10-15T10`, and the text says it only shows the shape of the value: the hour has to be one of the last 7 days, and the old one answered `400` `OUTSIDE_WINDOW`.
+- The example hour of the hourly download routes (`2026-01-15T10`, in the description, the `hour` parameter's example and the guide's `curl`) is now `2026-10-15T10`, and the text says it only shows the shape of the value: the hour has to be a recent one, and the old one answered `400` `OUTSIDE_WINDOW`.
 
 ### Changed
 
@@ -464,7 +473,7 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ### Changed
 
-- The hourly download routes (`GET /exchange/{exchangeId}/tickers/{base}/{quote}` and `.../klines/...`) serve the last 7 days. An hour that started more than 7 days before the request is `400` with `reason: OUTSIDE_WINDOW`, and the error carries `next`: the `POST /datasets/imports` request (`type: "cex"`) that imports exactly that hour as a dataset. Older history and ranges are imported the same way, within the plan's limits. The market-data guide explains it.
+- The hourly download routes (`GET /exchange/{exchangeId}/tickers/{base}/{quote}` and `.../klines/...`) serve recent hours only. An older hour is `400` with `reason: OUTSIDE_WINDOW`, and the error carries `next`: the `POST /datasets/imports` request (`type: "cex"`) that imports exactly that hour as a dataset. Older history and ranges are imported the same way, within the plan's limits. The market-data guide explains it.
 - Their errors are typed. `ResponseError` (with the `reason` and `next` that 0.128.30 added) is what every failure answers, and the contract lists the causes: `404` `NOT_YET_AVAILABLE` (the hour has just ended and is not stored yet, with `Retry-After`) and `NO_DATA` (the hour is stored and holds nothing for the instrument), `400` `OUTSIDE_WINDOW`, and the new `503` `TEMPORARILY_UNAVAILABLE` (reads of stored data are being limited, with `Retry-After`). The routes used to answer these with a body of the shape `{"error": ...}`, which the contract never described; a client that read `error` reads `message` now.
 - The `ts` column of a Lastra response is declared: microseconds since the epoch, in the column's metadata (`ts_unit: micros`) and in the new response header `X-Ts-Unit: micros`. Until now the unit was not declared and the service served milliseconds; the SDKs return the bytes untouched, so a client that decoded `ts` as milliseconds has to read the header (a Parquet response keeps its `TIMESTAMP` column in milliseconds).
 - The content type of a Lastra response is `application/vnd.qtsurfer.lastra`, which is what the service has always answered; the contract said `application/vnd.lastra`.
@@ -499,7 +508,7 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ### Added
 
-- `GET /exchange/{exchangeId}/instruments` and `GET /exchange/{exchangeId}/{segment}/instruments` also list the pools of a decentralized exchange: `GET /exchange/robinhood/uniswap-v3/instruments` returns the 50 pools of that protocol with the most volume over the last 24 hours among those with at least 10,000 US dollars of liquidity, refreshed every hour, in the same `data` / `meta` / `_links` envelope. A new schema `PoolDetail` describes a pool (`id`, its address and the value to put in `instruments` of a live run; `symbol`, the pair as the signals name it; the two tokens; `feePercent`; `tvlUsd`; `volume24hUsd`; `createdAt`), `PoolListResponse`, `PoolListMeta` and `PoolLinks` the envelope, and the `200` of both routes is one of `InstrumentListResponse` or `PoolListResponse`. The market-data guide has a section for it and "DEX pools" in the Live execution guide says where to find a pool.
+- `GET /exchange/{exchangeId}/instruments` and `GET /exchange/{exchangeId}/{segment}/instruments` also list the pools of a decentralized exchange: `GET /exchange/robinhood/uniswap-v3/instruments` returns the pools of that protocol with the most volume over the last 24 hours among those with enough liquidity, refreshed periodically, in the same `data` / `meta` / `_links` envelope. A new schema `PoolDetail` describes a pool (`id`, its address and the value to put in `instruments` of a live run; `symbol`, the pair as the signals name it; the two tokens; `feePercent`; `tvlUsd`; `volume24hUsd`; `createdAt`), `PoolListResponse`, `PoolListMeta` and `PoolLinks` the envelope, and the `200` of both routes is one of `InstrumentListResponse` or `PoolListResponse`. The market-data guide has a section for it and "DEX pools" in the Live execution guide says where to find a pool.
 
 ### Changed
 
@@ -576,7 +585,7 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ### Added
 
-- `warmFrom` on `POST /strategy/{strategyId}/live`: how many seconds before its start a run replays the market feed from, so its indicators and windows have history when the first live tick arrives. An integer from `0` to `3600`; `0` replays nothing, so the run delivers its first signal as soon as it is running, with indicators that start empty and a first bar that can be partial; omitted, the platform replays from the start of the current 15-minute block, between 0 and 900 seconds before the run's start, as before, so the first bar of a 15-minute window is complete. It can be set only when the run is started (it is not a parameter of `PUT /live/{runId}/params`), and any other value is `400`.
+- `warmFrom` on `POST /strategy/{strategyId}/live`: how many seconds before its start a run replays the market feed from, so its indicators and windows have history when the first live tick arrives. An integer from `0` to `3600`; `0` replays nothing, so the run delivers its first signal as soon as it is running, with indicators that start empty and a first bar that can be partial; omitted, the platform chooses how far back to replay, as before, so that the first bar of the usual windows is complete. It can be set only when the run is started (it is not a parameter of `PUT /live/{runId}/params`), and any other value is `400`.
 - A live run reports the `warmFrom` in effect: an integer, the one requested or, when none was, the one the platform chose (0 to 900), and `null` only for a run started before the field existed. It is returned in the start response, `GET /strategy/{strategyId}/live` and `GET /live/{runId}`.
 - The "Live execution" guide has a section on it, "Warming up".
 
@@ -584,7 +593,7 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ### Added
 
-- A live run carries `stats` when you read it (`GET /strategy/{strategyId}/live` and `GET /live/{runId}`): its latest counters, refreshed about once a minute while it is being executed — updates processed (`processed`), rate (`opsPerSecond`), instruments seen (`instrumentsSeen`), when they were written (`asOfMs`), the last time `processed` grew (`progressedAtMs`) and `stale`, which says only that the platform stopped updating them. A run whose `processed` is flat is not stale: a source that updates rarely, a funding rate for example, can stay flat for hours. Absent until the first snapshot exists; starting and stopping a run do not return it. A refresh of `stats` does not move `updatedAtMs`. New schema `LiveRunStats`; documented in the live execution guide.
+- A live run carries `stats` when you read it (`GET /strategy/{strategyId}/live` and `GET /live/{runId}`): its latest counters, refreshed periodically while it is being executed — updates processed (`processed`), rate (`opsPerSecond`), instruments seen (`instrumentsSeen`), when they were written (`asOfMs`), the last time `processed` grew (`progressedAtMs`) and `stale`, which says only that the platform stopped updating them. A run whose `processed` is flat is not stale: a source that updates rarely, a funding rate for example, can stay flat for hours. Absent until the first snapshot exists; starting and stopping a run do not return it. A refresh of `stats` does not move `updatedAtMs`. New schema `LiveRunStats`; documented in the live execution guide.
 
 ## [0.128.16] — 2026-10-01
 
@@ -592,7 +601,7 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 - A **stream URL** for a run: pass `stream: true` to `POST /strategy/{strategyId}/live` and the response carries `streamUrl`, a secret `wss://` address a simple client, or a service that passes your signals on to others, opens as an ordinary WebSocket to receive the run's signals as plain JSON text frames, from the `sandbox` stage on. It turns `relay` on, can only be asked for when the run is started, and is available on the plans that may broadcast (any other plan gets `429`). `GET /strategy/{strategyId}/live` returns the same `streamUrl` while the run is running and the plan allows it; stopping a run and `GET /live/{runId}` never carry it (they keep returning `LiveRun`; starting a run and `GET .../live` return the new `LiveRunWithStream`).
 - `POST /live/{runId}/stream` (`rotateLiveStream`) gives the run a new address and retires the old one; `DELETE /live/{runId}/stream` (`revokeLiveStream`) revokes it for good. Owner only.
-- The "Live execution" guide has a section on the stream: what a frame is, `?after=<signalId>` to resume, the limits (plan on 2 connections per URL and 10 per client address), why a connection closes (`1008`, `1013`, `4001`, `1001`, `1009`), and how to keep the URL secret. The sentences that said only you can read a sandbox run now say "except through a stream URL you create".
+- The "Live execution" guide has a section on the stream: what a frame is, `?after=<signalId>` to resume, the limits (connections per URL and per client address), why a connection closes (`1008`, `1013`, `4001`, `1001`, `1009`), and how to keep the URL secret. The sentences that said only you can read a sandbox run now say "except through a stream URL you create".
 
 ### Changed
 
@@ -657,8 +666,8 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 - **A command's `properties` land as top-level entries on the strategy's `CommandRequest`, not nested
   under their own `properties` key.** `docs/strategy_coding.md`'s "Receiving commands" example read
   `Map<String, Object> properties = request.get("properties"); properties.get("instrument")` — that
-  was a real design error published earlier today (0.128.9), not just wording: the runner puts every
-  property directly on the request's own map, so the correct read is `request.get("instrument")`.
+  was a real design error published earlier today (0.128.9), not just wording: every
+  property is put directly on the request's own map, so the correct read is `request.get("instrument")`.
   Corrected, along with a note that a value keeps its JSON type (so assigning a non-string one to a
   `String` throws `ClassCastException`). The command's own text is kept as its own field, separate
   from `properties` entirely, so no property name is off limits — `cmd` included.
@@ -703,8 +712,8 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 - **`POST /live/{runId}/commands` tells a running strategy something without restarting it**, for a strategy
   that implements the engine's `CommandRequestHandler`: `{"command": "<text>"}`, `202` with a `commandId` and
   the market position every execution applies it at. A command is transient, unlike a parameter — nothing
-  about it is stored, so a replica that restarts and replays only recent market history never sees one from
-  before that window. `409` for a run that is not running, a compiled strategy with no record of whether it
+  about it is stored, so an execution that restarts never sees one from
+  before the restart. `409` for a run that is not running, a compiled strategy with no record of whether it
   handles commands (register it again), or one that does not implement the handler at all; `503`, nothing
   sent, when it could not be delivered; `413` at 2 KiB, same convention as every other body-reading route.
 

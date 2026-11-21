@@ -40,7 +40,7 @@ header, the name of your tool is enough, and send the request again. `curl` and 
 A key that is missing, unknown, revoked or expired is answered `401` with `{"error": "invalid_credentials"}`
 (`AuthTokenRejected` in the API reference). The answer is the same for all four: it does not say which, so
 read the expiry of your key ahead of time, [below](#when-your-key-expires), rather than from this answer.
-Where a deployment requires scopes, a key that carries none is answered `403` with the code
+A key that carries no scopes is answered `403` with the code
 `apikey_without_scopes` and no token (`AuthTokenError`): create a key with at least one scope in the web app.
 
 ## When your key expires

@@ -42,8 +42,8 @@ npx @asyncapi/cli@6.2.0 validate asyncapi.yaml
 uv run scripts/live_ws_conformance.py --examples     # every example matches its schema
 QTSURFER_APIKEY=... uv run scripts/live_ws_conformance.py   # the running service matches the spec
 ```
-Describe only what a client sees on the socket. Server-side wiring (proxies, internal routes, the
-message bus behind the relay) stays out, and so do channel namespaces that are not a public product.
+Describe only what a client sees on the socket. Server-side wiring stays out, and so do channel
+namespaces that are not a public product.
 
 ### Preview locally
 ```bash
@@ -59,8 +59,8 @@ npx @redocly/cli lint openapi.yaml
 ## Key Conventions
 
 - **openapi.yaml is the source of truth** — the spec is maintained here, not extracted from code
-- **CI runs on GitHub alone.** This repo is mirrored, and the mirror's CI reads `.github/workflows`
-  too, so each job is guarded with `github.server_url == 'https://github.com'`. Do not remove the guard
+- **CI runs on GitHub alone**, so each job is guarded with `github.server_url == 'https://github.com'`.
+  Do not remove the guard
 - **This is a public repo** — no internal URLs, credentials, or infrastructure details
 - **Server URLs**: staging is `api.qtsurfer.net`, and it is the one that actually serves the API.
   `api.qtsurfer.com` is listed as production but is reserved and not yet live — do not point examples
