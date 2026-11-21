@@ -54,10 +54,11 @@ the fields below mean the same in each, and the rest belong to one kind only.
 | `baseAddress`, `quoteAddress`, `feePercent`, `tvlUsd`, `volume24hUsd`, `createdAt` | Token addresses, fee tier, liquidity and volume in US dollars, creation date | pools only |
 
 `lastPrice` and `volume24h` of an instrument are refreshed every few minutes; those of a pool are as of
-`meta.updatedAt`, which is refreshed every hour, so a pool's price can be up to one hour old.
+`meta.updatedAt`, which is refreshed every hour for `robinhood` and every 12 hours for `solana`, so a pool's
+price can be that old.
 
 A field with no data is left out of the entry, never sent as `null`: read an absent `lastPrice`,
-`volume24h` or `createdAt` as "not known".
+`volume24h`, `feePercent` or `createdAt` as "not known".
 
 ```bash
 curl https://api.qtsurfer.net/v1/exchange/binance/spot/instruments \
@@ -91,7 +92,8 @@ curl https://api.qtsurfer.net/v1/exchange/robinhood/uniswap-v3/instruments \
 }
 ```
 
-A pool's `id` is its address, in lower case. `symbol` is the pair as the signals of a run name it, which is
+A pool's `id` is its address: in lower case on Robinhood Chain, and on Solana a base58 address, which is
+case-sensitive, so use it exactly as listed. `symbol` is the pair as the signals of a run name it, which is
 not always the order other sites show it in (the same pool can read `USDG / WETH` elsewhere), so identify a
 pool by its address. A protocol can have several pools of one pair, one per fee tier (`feePercent`).
 
@@ -104,6 +106,35 @@ The listing has the 50 pools with the most volume over the last 24 hours (`volum
 least 10,000 US dollars of liquidity (`tvlUsd`), and is refreshed every hour (`meta.updatedAt`); `meta`
 states both limits. It is a place to start, not the whole market: a live run can read any pool of the
 protocol, listed or not. `404` means the listing is not available at the moment.
+
+### Solana
+
+`solana` is a decentralized exchange whose segments are its protocols: `orca`, `raydium`, `raydium-clmm`,
+`meteora` and `pumpswap`. `GET /exchange/solana/{segment}/instruments` lists the pools of each the same way,
+with these differences:
+
+- It is refreshed every 12 hours, not every hour: `meta.updatedAt` and the `lastPrice` of each pool are as
+  of that time.
+- An address, of a pool or of a token, is base58 and case-sensitive: use it exactly as listed.
+- `feePercent` is absent from most pools: the source does not tell it. Read it as "not known".
+- A pair of two of USDC, USDT and SOL is named after the first (`SOL/USDC`), and any other token against SOL
+  is quoted in SOL (`pippin/SOL`). A segment can list fewer than 50 pools when few of its most traded pools
+  hold 10,000 US dollars of liquidity (`pumpswap` does).
+- The pools are for importing as datasets (`dex.network: solana`, candles only: see
+  [Datasets](datasets.md)) and for backtesting. A live run cannot read a Solana pool yet: its segments are
+  not in `liveSegments` of `GET /exchanges`.
+
+```json
+{
+  "data": [
+    {"id": "Czfq3xZZDmsdGdUyrNLtRhGc47cXcZtLG4crryfu44zE", "symbol": "SOL/USDC", "base": "SOL", "quote": "USDC",
+     "baseAddress": "So11111111111111111111111111111111111111112",
+     "quoteAddress": "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+     "lastPrice": 68.95790853, "volume24h": 120200136, "tvlUsd": 16478497.45, "volume24hUsd": 119896016.58}
+  ],
+  "meta": {"updatedAt": "2026-11-21T00:33:30Z", "exchange": "solana", "segment": "orca", "venueType": "dex", "minTvlUsd": 10000, "limit": 50}
+}
+```
 
 ## Download hourly segments
 

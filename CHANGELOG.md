@@ -7,6 +7,26 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ## [Unreleased]
 
+## [0.128.59] — 2026-11-21
+
+### Added
+
+- The pools of Solana have a listing: `GET /exchange/solana/{segment}/instruments` answers, for each of its protocols (`orca`,
+  `raydium`, `raydium-clmm`, `meteora`, `pumpswap`), the pools worth running in the same shape as the listing of Robinhood Chain: up to
+  the 50 with most volume over the last 24 hours among those with at least 10,000 US dollars of liquidity, in `PoolDetail`, with
+  `meta.venueType: dex`. It is refreshed every 12 hours (`meta.updatedAt`), not every hour. A pair of two of USDC, USDT and SOL is named
+  after the first (`SOL/USDC`) and any other token against SOL is quoted in SOL (`pippin/SOL`). The pools are for importing as datasets
+  and for backtesting: a live run cannot read a Solana pool yet (its segments are not in `liveSegments` of `GET /exchanges`).
+  Guide: Market data ("Solana").
+
+### Changed
+
+- `PoolDetail.id` (and `baseAddress`, `quoteAddress`) is a base58 address on `solana`: 32 to 44 characters, case-sensitive, to be used
+  exactly as listed. On an EVM chain it stays `0x` and 40 hexadecimal digits in lower case.
+- `PoolDetail.feePercent` is no longer always present: it is left out when the source does not tell the pool's fee tier, which is the
+  case of most pools of `solana`. Every pool of `robinhood` still carries it.
+- The refresh interval of a pool listing depends on the exchange (every hour for `robinhood`, every 12 hours for `solana`), and so does
+  how old a pool's `lastPrice` can be.
 ## [0.128.58] — 2026-11-20
 
 ### Added
