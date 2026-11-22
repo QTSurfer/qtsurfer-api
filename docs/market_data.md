@@ -109,8 +109,9 @@ moment.
 ### Solana
 
 `solana` is a decentralized exchange whose segments are its protocols: `orca`, `raydium`, `raydium-clmm`,
-`meteora` and `pumpswap`. `GET /exchange/solana/{segment}/instruments` lists the pools of each the same way,
-with these differences:
+`meteora`, `pumpswap` and `pumpfun`. `GET /exchange/solana/{segment}/instruments` lists the pools of each the
+same way, except `pumpfun`: it follows a token by its mint, so it has no listing and the request answers `404`
+(see [DEX pools](live.md#dex-pools)). The listings have these differences:
 
 - An address, of a pool or of a token, is base58 and case-sensitive: use it exactly as listed.
 - `feePercent` is absent from most pools: it is not known for them. Read it as "not known".
@@ -118,8 +119,8 @@ with these differences:
   out from the symbol. A segment can list fewer pools than `meta.limit`, when few of its most traded pools
   have enough liquidity.
 - The pools are for importing as datasets (`dex.network: solana`, candles only: see
-  [Datasets](datasets.md)) and for backtesting. A live run cannot read a Solana pool yet: its segments are
-  not in `liveSegments` of `GET /exchanges`.
+  [Datasets](datasets.md)) and for backtesting. A live run reads a `solana` segment only when `GET /exchanges`
+  lists it in `liveSegments`; `pumpfun` is read by the mint of a token (see [DEX pools](live.md#dex-pools)).
 
 ```json
 {

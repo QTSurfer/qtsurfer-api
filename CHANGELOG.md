@@ -7,6 +7,25 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ## [Unreleased]
 
+## [0.128.61] — 2026-11-21
+
+### Added
+
+- A live run can read a Solana **token by its mint**: the segment `pumpfun` of `solana` follows a token from pump.fun's bonding
+  curve to its PumpSwap pool as one series of one-second candles, so a token can be read before it has a pool. See "Solana: a
+  token by its mint" in the live execution guide. The segment has no instrument listing
+  (`GET /exchange/solana/pumpfun/instruments` answers `404`), and a live run reads it when `GET /exchanges` lists it in the
+  `liveSegments` of `solana`. A mint that is not a token of pump.fun or PumpSwap, or that does not trade for a while after
+  the run asks for it, is refused like any pool the platform cannot serve.
+
+### Changed
+
+- The `instruments` entry of a `dex` source (a live run's start, an attached source and a signal notice) is, on `solana`, the
+  token's mint: a base58 key of 32 bytes, case-sensitive, kept exactly as sent. For the other exchanges it is still the pool's
+  `0x` address, not case-sensitive.
+- The text that said a live run cannot read a Solana pool and that `uniswap-v3` is the only protocol of a `dex` source no longer
+  says which segments are open to a live run: `GET /exchanges` does.
+
 ## [0.128.60] — 2026-11-21
 
 ### Changed

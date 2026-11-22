@@ -259,10 +259,10 @@ to `dex`:
 
 | Field | For a `dex` source |
 |---|---|
-| `exchange` | The chain the pool is on: an exchange `GET /exchanges` lists with `venueType: dex` and a protocol in its `liveSegments`, for example `robinhood` (Robinhood Chain). |
-| `segment` | The protocol of the pool, one of that exchange's `liveSegments`, for example `uniswap-v3`. |
+| `exchange` | The chain the pool or the token is on: an exchange `GET /exchanges` lists with `venueType: dex` and a protocol in its `liveSegments`, for example `robinhood` (Robinhood Chain) or `solana`. |
+| `segment` | The protocol of the pool, one of that exchange's `liveSegments`, for example `uniswap-v3`; on `solana`, `pumpfun` (see [Solana: a token by its mint](#solana-a-token-by-its-mint)). |
 | `type` | `kline` only. A `ticker` source is not available for a pool, and a ticker strategy cannot run on one. |
-| `instruments` | Exactly one entry: the pool's address, `0x` and 40 hexadecimal digits, not case-sensitive. It cannot be left out and `*` is not accepted. |
+| `instruments` | Exactly one entry: the pool's address, `0x` and 40 hexadecimal digits, not case-sensitive; on `solana`, the token's mint, which is case-sensitive. It cannot be left out and `*` is not accepted. |
 
 To find pools to run, list the exchange's instruments: `GET /exchange/robinhood/uniswap-v3/instruments` returns
 the pools with the most volume over the last 24 hours among those with enough liquidity, refreshed
@@ -289,6 +289,43 @@ pool when a run asks for it and replays the history the run's `warmFrom` calls f
 candle, so a run on a pool nobody else is reading takes a while to catch up: the longer the warm-up, the
 longer it takes. While it catches up the run can show `LAGGING`. A run that starts on a pool the platform is already following gets the
 history that exists for it, which is shorter than its `warmFrom` when the pool was started only a moment ago.
+
+#### Solana: a token by its mint
+
+On `solana` a run reads a **token**, not a pool. Set `segment` to `pumpfun` and `instruments` to the token's mint:
+
+```json
+{
+  "sources": [
+    {"venueType": "dex", "exchange": "solana", "segment": "pumpfun", "type": "kline", "instruments": ["2TngN4B7XaoGSKsYvttq5bFAdM4Z4xCSnuyRwGiFpump"]}
+  ]
+}
+```
+
+The segment can be read live when `GET /exchanges` lists it in the `liveSegments` of `solana`. Everything above
+holds, with these differences:
+
+- **The mint names the token.** It is a base58 key of 32 bytes (32 to 44 letters and digits) and it is
+  **case-sensitive**: write it exactly as the token has it. Two mints that differ only in case are two different
+  tokens, and what you send is kept as it is.
+- **One series from the curve to the pool.** A token starts on pump.fun's bonding curve, where there is no pool;
+  when it graduates it trades in the PumpSwap pool pump.fun creates for it. The candles go on without a break and
+  with the same mint, so a run needs no change when the token graduates. Another pool of the same token is a
+  different market and is not part of the series.
+- **No list to choose from.** Tokens are born all the time: `GET /exchange/solana/pumpfun/instruments` answers
+  `404`. Take the mint from wherever the token was found.
+- **The pair.** The `instrument` of the signals is `BASE/QUOTE`: `BASE` is the first 8 characters of the mint and
+  `QUOTE` is what the token is quoted in, `SOL`, `USDC` or `USDT`. A token quoted in anything else cannot be
+  followed.
+- **There is no history.** The platform has no trades of a token from before it started following it, so
+  `warmFrom` does not bring older candles: a run reads the token from the moment the platform starts following it,
+  which is when the first run asks for it.
+- **A gap is a gap.** While the platform cannot follow a token, no candles are published for it: a second with no
+  candle was not observed, whereas a candle with zero volume and zero trades is a market that did not trade.
+- **A token that does not trade is refused.** A mint that is not a token of pump.fun or PumpSwap, or a token that
+  does not trade for a while after the run asks for it, is refused like any pool the platform cannot serve: the run
+  fails with the usual reason (below) and holds no place. It takes longer than for a pool, because the platform
+  waits for the token to trade before it refuses it.
 
 A `dex` run whose pool cannot be served fails within seconds instead of waiting for candles that will not come,
 and the platform stops it, so it holds no place (see [Why a run failed or stopped](#why-a-run-failed-or-stopped)):

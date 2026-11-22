@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: QTSurfer API
   summary: QTSurfer backend services API
-  version: 0.128.60
+  version: 0.128.61
   contact:
     name: QTSurfer Support
     email: support@qtsurfer.com
@@ -284,13 +284,14 @@ paths:
         `GET /exchange/{exchangeId}/instruments` (spot).
 
         For a decentralized exchange the segments are its protocols (`uniswap-v3` for `robinhood`; `orca`,
-        `raydium`, `raydium-clmm`, `meteora` and `pumpswap` for `solana`) and the instruments are its pools,
+        `raydium`, `raydium-clmm`, `meteora`, `pumpswap` and `pumpfun` for `solana`) and the instruments are its pools,
         each a `PoolDetail`: the ones with most volume in the last 24 hours among those with enough liquidity
         (`meta.limit` is the most the listing holds and `meta.minTvlUsd` the least liquidity a listed pool has),
         refreshed periodically (`meta.updatedAt`). The list is a
         place to start, not the whole market: a live run can read any pool of the protocol, listed or not. The
-        pools of `solana` are for importing as datasets and for backtesting: a live run cannot read a Solana
-        pool yet (its segments are not in `liveSegments` of `GET /exchanges`).
+        pools of `solana` are for importing as datasets and for backtesting; a live run reads a `solana` segment
+        only when `GET /exchanges` lists it in `liveSegments`. The segment `pumpfun` follows a token by its mint, so
+        it has no listing: this request answers `404` for it.
       parameters:
         - name: exchangeId
           in: path
@@ -8280,11 +8281,11 @@ components:
         exchange:
           type: string
           example: binance
-          description: The exchange id, as `GET /exchanges` lists it. For a `dex` source, the chain the pool is on, for example `robinhood`.
+          description: The exchange id, as `GET /exchanges` lists it. For a `dex` source, the chain the pool or the token is on, for example `robinhood` or `solana`.
         segment:
           type: string
           example: spot
-          description: The segment, as `GET /exchanges` lists it for that exchange, among its `liveSegments` (a segment with no live data is refused with `400`). For a `cex` source, the market segment (`spot` today); for a `dex` source, the protocol of the pool, `uniswap-v3` the only one today.
+          description: The segment, as `GET /exchanges` lists it for that exchange, among its `liveSegments` (a segment with no live data is refused with `400`). For a `cex` source, the market segment (for example `spot`); for a `dex` source, the protocol of the pool, for example `uniswap-v3`, or on `solana` the segment `pumpfun`, which follows a token by its mint.
         type:
           type: string
           enum: [ticker, kline]
@@ -8300,7 +8301,7 @@ components:
             records as the instruments it accepts, when it records one, or `["*"]` for every instrument the
             exchange/segment offers (tier-gated). An entry is written `BASE/QUOTE` and either side can be `*` to mean
             any, such as any base paired with USDT. Symbols are not case-sensitive and spaces around them are ignored, so `btc/usdt` and
-            `BTC/USDT` are the same instrument. A `dex` source holds exactly one entry, the address of its pool.
+            `BTC/USDT` are the same instrument. A `dex` source holds exactly one entry: the address of its pool or, on `solana`, the mint of its token.
     LiveSourceRequest:
       type: object
       required: [venueType, exchange, segment, type]
@@ -8316,11 +8317,11 @@ components:
         exchange:
           type: string
           example: binance
-          description: The exchange id, as `GET /exchanges` lists it. For a `dex` source, the chain the pool is on, for example `robinhood`.
+          description: The exchange id, as `GET /exchanges` lists it. For a `dex` source, the chain the pool or the token is on, for example `robinhood` or `solana`.
         segment:
           type: string
           example: spot
-          description: The segment, as `GET /exchanges` lists it for that exchange, among its `liveSegments` (a segment with no live data is refused with `400`). For a `cex` source, the market segment (`spot` today); for a `dex` source, the protocol of the pool, `uniswap-v3` the only one today.
+          description: The segment, as `GET /exchanges` lists it for that exchange, among its `liveSegments` (a segment with no live data is refused with `400`). For a `cex` source, the market segment (for example `spot`); for a `dex` source, the protocol of the pool, for example `uniswap-v3`, or on `solana` the segment `pumpfun`, which follows a token by its mint.
         type:
           type: string
           enum: [ticker, kline]
@@ -8341,8 +8342,9 @@ components:
             a `.` or a space inside a side, or a `*` mixed with other characters of a side) makes the run fail when it
             starts. Plan limits: a list with an entry that has a `*` on a side counts like `["*"]` and only plans that
             include the wildcard accept it; the other entries are counted one by one. The instruments the run actually
-            reads come back in the run's `sources`. A `dex` source needs exactly one entry, the address of its pool (`0x` and 40
-            hexadecimal digits, not case-sensitive): it cannot be left out and `*` is not accepted.
+            reads come back in the run's `sources`. A `dex` source needs exactly one entry: the address of its pool (`0x` and 40
+            hexadecimal digits, not case-sensitive) or, on `solana`, the mint of its token (a base58 key of 32 to 44
+            characters, case-sensitive: write it as the token has it). It cannot be left out and `*` is not accepted.
     AttachLiveSourceRequest:
       type: object
       required: [source]
@@ -9430,7 +9432,7 @@ components:
             type: string
           description: >-
             For a `cex` source, 1 to 10 pairs written `BASE/QUOTE`, with no `*`. For a `dex` source, exactly one entry,
-            the address of the pool.
+            the address of the pool or, on `solana`, the mint of the token (case-sensitive).
     SignalNoticeRequest:
       type: object
       required: [source]
