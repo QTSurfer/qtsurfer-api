@@ -435,7 +435,7 @@ are `ATTACHING` or `ATTACHED`, and empty while it waits.
 
 `reason` is a string that may gain values: `OWNER` (you detached it), `REFUSED` (the platform refused it), `POOL_GONE` (a
 `dex` pool stopped being followed), `CAPACITY` (the platform has no room to follow it), `SAME_PAIR` (a `dex` pool of a pair the run
-already reads through another pool) and `NO_DATA` (the instrument,
+already reads through another pool), `STRATEGY` (the strategy asked for it) and `NO_DATA` (the instrument,
 of a centralized exchange, sent nothing for five minutes: it may be one that the platform does not capture). A run started with a `dex`
 source that the platform will not follow fails as it always has (see [Why a run failed or
 stopped](#why-a-run-failed-or-stopped)), and so does one whose first source, attached while it waited, is such a pool. A pool
@@ -449,6 +449,27 @@ usually within half a minute of the attach taking effect, and the strategy's `on
 an error. On a run that has stopped there is nothing to tell, and the attachment goes straight to `DETACHED`. Positions that a [paper account](live_paper.md#gaps) had open in that source's instruments are reported as
 gaps. When the last source is detached the run waits again: the strategy's memory is released, so the next attach
 starts it clean, and the paper accounts are kept.
+
+### A strategy that leaves a source
+
+A strategy can end a source by itself, when it has finished with the token or the pool: it asks, and the platform detaches it. In
+[QTScript](qtscript.md#a-strategy-that-leaves-a-source) a window body, `onAttach { }` or `onDetach { }` calls `detach()`; a Java
+strategy calls `detach(instrument)`, `detach(context)` or, in a window, `detach()` ([Coding Java
+strategies](strategy_coding.md#a-strategy-that-leaves-a-source)).
+
+- **It is a request, applied before the next event.** The source is read up to the event the strategy was processing when it asked,
+  and the platform ends it before the first event after that one, the same on every execution of the run, as for a
+  [command](#commands). A run that reads several sources may hand the strategy one more event of that source than the one it asked at.
+- **A source is detached whole.** A `cex` source that reads several instruments goes with all of them: `detach` ends the source that
+  reads the instrument.
+- **From `onDetach` it does nothing.** A strategy may call `detach` there, for instance from closing code it shares with the
+  other hooks, and the platform ignores the request: the source is already going.
+- **It ends like any detach.** The attachment becomes `DETACHED` with the `reason` `STRATEGY`, the strategy's `onDetach` is told
+  `STRATEGY`, and when it was the last source the run waits again, so that the next attach, a new notice for instance, starts it.
+- **It is a signal of the type `system`**, `kind` `DETACH`, with the attachment in its `data`. It is in the run's history,
+  `GET /live/{runId}/signals?type=system`: without `type` the history does not carry it, so a client that does not know the type never
+  sees it. It is never pushed on the channel.
+- **A backtest ignores it:** a backtest reads the data it was given.
 
 ### What can refuse an attach
 
@@ -829,8 +850,8 @@ Each signal pushed on a `sig:<runId>` channel (the `pub.data` of the `push` fram
 | `signalId` | Stable id for this exact signal — dedupe on it if your connection ever reconnects mid-stream. |
 | `stage` | `sandbox` or `live`: the stage the run was in when it produced the signal. Only you receive a `sandbox` signal on this channel; everyone allowed onto the channel receives `live` ones. |
 | `paramsVersion` | The parameter set in force when this signal was produced. |
-| `type` | `hint`, `info`, `marker`, or `command` — plus `paper` when reading a `mix` run's history (see [Paper trading](live_paper.md#output-separate-or-mix); paper items are never pushed on this channel). |
-| `kind` | `BUY`/`SELL` for a `hint`; the command name for a `command`; absent otherwise. |
+| `type` | `hint`, `info`, `marker`, or `command` — plus `paper` when reading a `mix` run's history, and `system` when a strategy asks the platform to detach a source (never pushed on this channel, see [A strategy that leaves a source](#a-strategy-that-leaves-a-source)); the history carries `system` only when `type` asks for it (see [Paper trading](live_paper.md#output-separate-or-mix); paper items are never pushed on this channel). |
+| `kind` | `BUY`/`SELL` for a `hint`; the command name for a `command`; `DETACH` for a `system`; absent otherwise. |
 | `eventTsMs` | Market time the signal was produced. |
 | `emittedAtMs` | Time it was published — always ≥ `eventTsMs`. |
 | `instrument` | The instrument the signal is about: `exchange`, `segment` and `symbol` (`BTC/USDT`). For a `dex` run also `id`, the contract: the address of the pool, or the mint of the token. The `symbol` is the pair as the candles name it and does not identify a token, so act on `id`. |
@@ -982,7 +1003,7 @@ run's own `sources`, or in a signal's `instrument.symbol`).
 ### Filtering by type
 
 `type` narrows to one or more signal types, comma-separated: `hint`, `info`, `marker`, `command`,
-`paper`. It combines with `instrument` — `?type=hint&instrument=*/USDT` is every hint on a USDT pair.
+`paper`, `system`. With no `type` the first five are returned and `system` is not. It combines with `instrument` — `?type=hint&instrument=*/USDT` is every hint on a USDT pair.
 Both filters are carried over into `_links.next`, so following it keeps the same selection.
 
 ### The window moves, and cursors expire

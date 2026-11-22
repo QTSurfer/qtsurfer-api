@@ -547,7 +547,7 @@ Inside either body `$context` is the attachment, with these accessors and nothin
 | `$context.getInstrumentCount()`, `$context.getInstrument(i)` | how many instruments the attachment reads, and the `i`th as a symbol |
 | `$context.hasInstrument("BTC/USDT")` | whether it reads that instrument |
 | `$context.isWarmingUp()` | whether the attachment has a warm-up to replay (`warmFrom` above `0`) |
-| `$context.getReason()` | never `null`: `""` in `onAttach`; in `onDetach` one of `"OWNER"`, `"REFUSED"`, `"POOL_GONE"`, `"CAPACITY"` or `"FUNDS"`. A source dropped for lack of data, and a `dex` pool of a pair the run already reads (`SAME_PAIR` on the attachment), arrive as `"REFUSED"` |
+| `$context.getReason()` | never `null`: `""` in `onAttach`; in `onDetach` one of `"OWNER"`, `"REFUSED"`, `"POOL_GONE"`, `"CAPACITY"`, `"FUNDS"` or `"STRATEGY"`. A source dropped for lack of data, and a `dex` pool of a pair the run already reads (`SAME_PAIR` on the attachment), arrive as `"REFUSED"` |
 
 For a `dex` source the attachment reads one instrument, the pair the pool's candles carry (`Rocco/WETH`), and `onAttach`
 runs when the pool delivers its first candle, just before it ([The instrument of a pool](live.md#the-instrument-of-a-pool)).
@@ -586,6 +586,24 @@ out of time or failed).
 why. It does **not** run when the run stops or fails: a stop is not a point in the run's data, so nothing a hook emitted
 then could be tied to the events the run had read. To act before a run ends, closing its open positions for instance, send
 it a command ([Handling a command](#handling-a-command)) and stop the run once the command has been applied.
+
+### A strategy that leaves a source
+
+`detach();` asks the platform to detach a source, because the strategy has finished with it ([A strategy that leaves a
+source](live.md#a-strategy-that-leaves-a-source)):
+
+- in a **window** body it ends the source that reads the instrument the window is about;
+- in `onAttach { }` it ends the attachment the hook is told of: `detach();` is the same as `detach($context);`;
+- in `onDetach { }` it may be called and does nothing: the source is already going.
+
+```
+strategy "Quick look" kline
+
+setup:
+  window close m5 { emitInfo("seen", close); detach(); }
+```
+
+The request is applied before the next event and the strategy's `onDetach` is told `"STRATEGY"`; a backtest ignores it.
 
 A Java strategy overrides the same two methods of `Strategy` - see [Coding Java
 strategies](strategy_coding.md#attaching-and-detaching-a-source).

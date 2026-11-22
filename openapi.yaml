@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: QTSurfer API
   summary: QTSurfer backend services API
-  version: 0.128.64
+  version: 0.128.65
   contact:
     name: QTSurfer Support
     email: support@qtsurfer.com
@@ -3852,7 +3852,7 @@ paths:
           required: false
           schema:
             type: string
-          description: Narrow to one or more signal types, comma-separated (`hint`, `info`, `marker`, `command`, `paper`). Combines with `instrument`.
+          description: Narrow to one or more signal types, comma-separated (`hint`, `info`, `marker`, `command`, `paper`, `system`). With no `type` the first five are returned and `system` is not. Combines with `instrument`.
         - name: cursor
           in: query
           required: false
@@ -8404,7 +8404,7 @@ components:
           description: '`ATTACHING` (accepted; it takes effect at `effectiveAtMs`), `ATTACHED` (the run is reading it), `DETACHING` (a detach is accepted), `DETACHED` (the run no longer reads it) or `REFUSED` (the platform could not follow it; the run stays as it was). The set may grow: read an unknown value as a source in transition.'
         reason:
           type: string
-          description: 'Why it is `DETACHED` or `REFUSED`, when there is something to say: `OWNER` (you detached it), `REFUSED` (the platform refused it), `POOL_GONE` (a `dex` pool stopped being followed), `CAPACITY` (the platform has no room to follow it) or `NO_DATA` (an instrument of a centralized exchange that the platform does not capture sent nothing for five minutes). The set may grow.'
+          description: 'Why it is `DETACHED` or `REFUSED`, when there is something to say: `OWNER` (you detached it), `REFUSED` (the platform refused it), `POOL_GONE` (a `dex` pool stopped being followed), `CAPACITY` (the platform has no room to follow it), `STRATEGY` (the strategy asked for it) or `NO_DATA` (an instrument of a centralized exchange that the platform does not capture sent nothing for five minutes). The set may grow.'
         message:
           type: string
           description: A sentence saying more about a `REFUSED` attachment. Do not parse it.
@@ -9235,11 +9235,11 @@ components:
           description: The parameter set in force when this signal was produced.
         type:
           type: string
-          enum: [hint, info, marker, command, paper]
-          description: '`paper` items appear only for a run whose `paper.output` is `mix`; they are not relayed over the WebSocket channel.'
+          enum: [hint, info, marker, command, paper, system]
+          description: '`paper` items appear only for a run whose `paper.output` is `mix`; they are not relayed over the WebSocket channel. `system` is what a strategy tells the platform that runs it, today a request to detach a source (see "A strategy that leaves a source" in the Live execution guide): `GET /live/{runId}/signals` returns it only when `type` asks for it, and the WebSocket channel never carries it.'
         kind:
           type: ['string', 'null']
-          description: '`BUY`/`SELL` for a `hint`, the command name for a `command`; for `paper`, what the item is: `fill`, `trade`, `equity`, `mark`, `kpi` or `gap`. Absent otherwise.'
+          description: '`BUY`/`SELL` for a `hint`, the command name for a `command`, `DETACH` for a `system`; for `paper`, what the item is: `fill`, `trade`, `equity`, `mark`, `kpi` or `gap`. Absent otherwise.'
         eventTsMs:
           type: integer
           format: int64

@@ -7,6 +7,17 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ## [Unreleased]
 
+## [0.128.65] — 2026-11-22
+
+### Added
+
+- **A strategy can leave a source by itself**: `detach()` in QTScript (in a window, in `onAttach { }` or in `onDetach { }`) and
+  `detach(...)` in a Java strategy ask the platform to detach the source. It is applied before the next event, the attachment ends
+  `DETACHED` with the `reason` `STRATEGY`, and the strategy's `onDetach` is told `STRATEGY`. See "A strategy that leaves a source" in
+  the live execution guide. Called from `onDetach` it does nothing, because the source is already going.
+- The signal type **`system`**, with `kind` `DETACH`, is the record of that request: `GET /live/{runId}/signals?type=system`. The
+  history does not return it unless `type` asks for it, and the WebSocket channel never carries it.
+
 ## [0.128.64] — 2026-11-22
 
 ### Added

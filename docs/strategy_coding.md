@@ -443,7 +443,7 @@ without segments); `getVenueType()` (the enum `VenueType`: `CEX`, `DEX`) and `ge
 `Ticker`, `KLine`, `FundingRate`), with `getVenueTypeName()` (`"cex"` or `"dex"`) and `getTypeName()` (`"ticker"`,
 `"kline"` or `"funding"`) as the same values in text; `getInstrumentCount()`, `getInstrument(int)` (the symbol),
 `hasInstrument(String)` and `instrumentList()`; `isWarmingUp()`; and `getReason()`, never `null`: `""` on an attach and, on
-a detach, one of `REASON_OWNER`, `REASON_REFUSED`, `REASON_POOL_GONE`, `REASON_CAPACITY` or `REASON_FUNDS` (as text:
+a detach, one of `REASON_OWNER`, `REASON_REFUSED`, `REASON_POOL_GONE`, `REASON_CAPACITY`, `REASON_FUNDS` or `REASON_STRATEGY` (as text:
 `"OWNER"`, ...). A source dropped for lack of data, and a `dex` pool of a pair the run already reads (`SAME_PAIR` on the attachment), arrive as `REASON_REFUSED`.
 
 For a `dex` source the attachment reads one instrument, the pair the pool's candles carry (`Rocco/WETH`): `getInstrument(0)` is
@@ -467,6 +467,26 @@ and `onDetach` once after its last, also when it ends before its data does (canc
 why. It does **not** run when the run stops or fails: a stop is not a point in the run's data, so nothing a hook emitted
 then could be tied to the events the run had read. To act before a run ends, closing its open positions for instance, send
 it a command ([Receiving commands](#receiving-commands)) and stop the run once the command has been applied.
+
+### A strategy that leaves a source
+
+A strategy that has finished with a source asks the platform to detach it ([A strategy that leaves a
+source](live.md#a-strategy-that-leaves-a-source)):
+
+```java
+@Override
+public void update(Kline kline) {
+    super.update(kline);
+    if (seenLongEnough(kline)) {
+        detach(kline.getInstrument()); // the source that reads this instrument
+    }
+}
+```
+
+`detach(Instrument)` ends the source that reads the instrument; `detach(StrategyContext)`, called from `onAttach` or `onDetach`, ends
+the attachment the context describes, by its id; in a window listener, `detach()` ends the source of the window's instrument. The
+request is applied before the next event and `onDetach` is told `REASON_STRATEGY`; a backtest ignores it. Called from
+`onDetach`, `detach` is allowed and does nothing: the source is already going.
 
 A QTScript strategy does the same with `onAttach { }` and `onDetach { }` - see
 [QTScript](qtscript.md#attaching-and-detaching-a-source).
