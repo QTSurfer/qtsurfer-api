@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: QTSurfer API
   summary: QTSurfer backend services API
-  version: 0.128.63
+  version: 0.128.64
   contact:
     name: QTSurfer Support
     email: support@qtsurfer.com
@@ -3557,7 +3557,8 @@ paths:
 
         `source` is the same entry `sources` takes at start and is checked the same way (see "Sources" in the Live
         execution guide). `warmFrom` is how many seconds of the feed before the attachment the strategy sees first,
-        `0` to `3600`, for this source only; left out, the same default as at start. `ref` is a string of yours, up to
+        `0` to `3600`, for this source only; left out, the same default as at start. `resolveInstrument` says when the
+        strategy is told of a `dex` pool (see "The instrument of a pool" in the Live execution guide). `ref` is a string of yours, up to
         64 characters: sending the same `ref` to the same run answers the attachment it already made instead of
         making another one, so a retried request or a repeated alert is safe. So does sending a source the run
         already has attached or being attached, whatever its `ref`.
@@ -5131,7 +5132,8 @@ paths:
         `type` is how the run reads a centralized exchange's instrument, `ticker` or `kline`, and must be one the run's
         strategy consumes; left out, `kline`. A pool is always read as `kline`. `warmFrom` is as for an attachment,
         `0` to `3600`; left out, `0`, so the run reads from the moment of the delivery. A pool delivered to a run that
-        already reads another is read from that moment whatever `warmFrom` says.
+        already reads another is read from that moment whatever `warmFrom` says. `resolveInstrument` is as for an
+        attachment.
 
         A subscription feeds at most its `maxRuns` runs at once, and a run is fed by one subscription of a channel at a
         time. The same run sent again answers the subscription unchanged.
@@ -8361,6 +8363,10 @@ components:
           type: string
           maxLength: 64
           description: A string of yours. Sending the same `ref` to the same run answers the attachment it already made instead of making another one.
+        resolveInstrument:
+          type: boolean
+          default: true
+          description: 'For a `dex` pool. `true`: the strategy is told of the source, with the pair the pool''s candles carry, when the pool delivers its first candle. `false`: it is told at once, with a stand-in instrument made of the pool''s address and `<exchange>:<segment>`. A centralized exchange''s source accepts the field and ignores it. See "The instrument of a pool" in the Live execution guide.'
     LiveAttachmentAccepted:
       type: object
       required: [attachmentId, state]
@@ -8387,6 +8393,9 @@ components:
         warmFrom:
           type: integer
           description: The seconds of warm-up in effect for this source.
+        resolveInstrument:
+          type: boolean
+          description: 'The value in effect for this source: how the strategy is told of a `dex` pool. See "The instrument of a pool" in the Live execution guide.'
         ref:
           type: string
           description: The `ref` it was attached with, when there was one.
@@ -9263,6 +9272,9 @@ components:
           type: string
         segment:
           type: string
+        id:
+          type: string
+          description: 'For a `dex` run, the contract the signal is about: the address of the pool, or the mint of the token, as `GET /exchange/{exchange}/{segment}/instruments` lists a pool''s `id`. `symbol` is the pair as the candles name it, and a symbol does not identify a token, since another can be issued under the same one, so act on `id`. Absent for the instrument of a centralized exchange.'
         symbol:
           type: string
           description: Slashed form, e.g. `BTC/USDT`.
@@ -9672,6 +9684,10 @@ components:
           maximum: 3600
           default: 0
           description: Seconds of warm-up of each attachment a delivery makes, as for `POST /live/{runId}/attachments`.
+        resolveInstrument:
+          type: boolean
+          default: true
+          description: 'As for `POST /live/{runId}/attachments`, for each pool a delivery attaches. For a `dex` pool. `true`: the strategy is told of the source, with the pair the pool''s candles carry, when the pool delivers its first candle. `false`: it is told at once, with a stand-in instrument made of the pool''s address and `<exchange>:<segment>`. A centralized exchange''s source accepts the field and ignores it. See "The instrument of a pool" in the Live execution guide.'
     SignalSubscriptionRun:
       type: object
       required: [runId, type, warmFrom, createdAtMs]
@@ -9683,6 +9699,8 @@ components:
           enum: [ticker, kline]
         warmFrom:
           type: integer
+        resolveInstrument:
+          type: boolean
         createdAtMs:
           type: integer
           format: int64

@@ -361,6 +361,25 @@ how many pools you can follow at once across your runs (`429`, with the number).
   half a minute of taking effect, and none of its candles reaches the strategy. Attach it to another run, or detach the first
   pool.
 
+#### The instrument of a pool
+
+A pool is named by its address, but the strategy sees the pair its candles carry (`Rocco/WETH`), which is known only once
+the pool has delivered a candle. So by default, with `resolveInstrument` `true` when you
+[attach](#attaching-and-detaching-a-source) it, the strategy's `onAttach` is told when the pool delivers its first candle,
+and just before that candle, with the pair as the attachment's instrument. A pool the platform refuses before then was never
+told of, and nothing is told of its end.
+
+With `resolveInstrument` `false`, `onAttach` runs at once, when the source takes effect, with a stand-in instrument built
+from what the attach says: the pool's address as its base and `<exchange>:<segment>` as its quote, such as
+`0x52e65b17fb6e5ba00ed806f37afcd2daa50271ca/robinhood:uniswap-v3`. The stand-in is not the pair of the candles, so a strategy
+that keys its state by the pair of its candles pairs `onAttach` and `onDetach` by the attachment's id, the same in both;
+`onDetach` carries the pair if the pool delivered one. A source given when a run starts has no choice: it is told as with
+`true`. To choose, start the run with no source and attach it.
+
+A symbol does not identify a token: another can be issued under the same one. Identify it by its address, which every signal of
+a `dex` run carries as `instrument.id`. A first candle needs the platform to be following the pool, so with `true` the
+strategy hears of a pool some seconds after the attach takes effect, and of a token of pump.fun when it next trades.
+
 ## Attaching and detaching a source
 
 A run does not have to start on a market feed. Start it with no `sources` and it **waits** (`state: WAITING`): it
@@ -388,6 +407,7 @@ source attached for you.
 |---|---|
 | `source` | Required. The same entry `sources` takes at start, checked the same way: exchange, segment and type, and its instruments (a `dex` source is exactly one pool). See [Sources](#sources). |
 | `warmFrom` | Optional. How many seconds of the feed before the attachment the strategy sees first, `0` to `3600`, as [at start](#warming-up-warmfrom) but for this source only. Left out, the same default as at start. A `dex` pool attached to a run that already reads another is read from now on: `0`, or left out, are the only values it takes (see [Several pools in one run](#several-pools-in-one-run)). |
+| `resolveInstrument` | Optional, `true` by default; only a `dex` pool reads it. `true`: the strategy is told of the source, with the pair the pool's candles carry, when the pool delivers its first candle, and before that candle. `false`: it is told at once, with a stand-in instrument made of the pool's address and `<exchange>:<segment>`. See [The instrument of a pool](#the-instrument-of-a-pool). A `cex` source accepts the field and ignores it. |
 | `ref` | Optional. A string of yours, up to 64 characters. Sending the same `ref` to the same run answers the attachment it already made instead of making another one, so a retried request, or an alert that arrives twice, is safe. Sending a source the run already has attached, or is attaching, answers that attachment too, whatever its `ref`. |
 
 **Every source attached to a run at the same time is on the same market feed**: the same exchange for a `cex`, the same
@@ -401,7 +421,7 @@ acceptance; `state` says when it has happened.
 ### Reading the attachments
 
 `attachments` is a list on the run, in `GET /strategy/{strategyId}/live` and `GET /live/{runId}`: for each one its
-`attachmentId`, the `source` as the platform holds it, `warmFrom`, your `ref`, `state`, `reason` and `message` when
+`attachmentId`, the `source` as the platform holds it, `warmFrom`, `resolveInstrument`, your `ref`, `state`, `reason` and `message` when
 there is something to say, `createdAtMs` and `effectiveAtMs`. The run's `sources` are the sources of its attachments that
 are `ATTACHING` or `ATTACHED`, and empty while it waits.
 
@@ -434,7 +454,7 @@ starts it clean, and the paper accounts are kept.
 
 | Status | When |
 |---|---|
-| `400` | The body: no `source`, a `warmFrom` outside `0` to `3600`, a `ref` longer than 64 characters; or a source a start would refuse, with the same messages (a malformed one, a pool that is not one address, a type the strategy cannot consume, a segment with no live data); or a `warmFrom` above `0` for a `dex` pool attached to a run that already reads another; or a wildcard instrument (`*`, or a pair with a `*` on one side) on a run started with `paper.accounts: instrument`, on every plan (that run opens one account for each instrument it reads, so they have to be named: attach one at a time, or a list). |
+| `400` | The body: no `source`, a `warmFrom` outside `0` to `3600`, a `ref` longer than 64 characters, a `resolveInstrument` that is not `true` or `false`; or a source a start would refuse, with the same messages (a malformed one, a pool that is not one address, a type the strategy cannot consume, a segment with no live data); or a `warmFrom` above `0` for a `dex` pool attached to a run that already reads another; or a wildcard instrument (`*`, or a pair with a `*` on one side) on a run started with `paper.accounts: instrument`, on every plan (that run opens one account for each instrument it reads, so they have to be named: attach one at a time, or a list). |
 | `402` | A wildcard instrument on a plan that does not include it. |
 | `404` | No such run, or it is not yours; on a detach, no such attachment. |
 | `409` | The run is not running, or the source is on another market feed than the ones already attached. |
@@ -813,6 +833,7 @@ Each signal pushed on a `sig:<runId>` channel (the `pub.data` of the `push` fram
 | `kind` | `BUY`/`SELL` for a `hint`; the command name for a `command`; absent otherwise. |
 | `eventTsMs` | Market time the signal was produced. |
 | `emittedAtMs` | Time it was published — always ≥ `eventTsMs`. |
+| `instrument` | The instrument the signal is about: `exchange`, `segment` and `symbol` (`BTC/USDT`). For a `dex` run also `id`, the contract: the address of the pool, or the mint of the token. The `symbol` is the pair as the candles name it and does not identify a token, so act on `id`. |
 | `order` | Present only for a `hint`. |
 | `data` | The signal's own free-form payload: what the strategy put there with `signal.set(...)`. Whoever may read the run may read it, so on a `public` run it is public. A signal whose `data` is over 8 KiB (8,192 bytes of its JSON) is not pushed on this channel; [the history route](#reading-signals-a-run-already-produced) returns it whole. |
 | `regenerated` | `true` only for a signal republished to fill a gap in the historical record — always `false` for a signal you are seeing for the first time. |

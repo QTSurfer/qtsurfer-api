@@ -446,6 +446,12 @@ without segments); `getVenueType()` (the enum `VenueType`: `CEX`, `DEX`) and `ge
 a detach, one of `REASON_OWNER`, `REASON_REFUSED`, `REASON_POOL_GONE`, `REASON_CAPACITY` or `REASON_FUNDS` (as text:
 `"OWNER"`, ...). A source dropped for lack of data, and a `dex` pool of a pair the run already reads (`SAME_PAIR` on the attachment), arrive as `REASON_REFUSED`.
 
+For a `dex` source the attachment reads one instrument, the pair the pool's candles carry (`Rocco/WETH`): `getInstrument(0)` is
+its symbol and `instrumentList().get(0)` the `Instrument`, which `createInfoStrategySignal` takes. `onAttach` runs when the pool
+delivers its first candle, just before it ([The instrument of a pool](live.md#the-instrument-of-a-pool)). Attached with
+`resolveInstrument: false`, it runs at once and the instrument is a stand-in, `<address>/<exchange>:<segment>`; `onDetach` then
+carries the pair if the pool delivered one. Pair the two methods by `getId()`, the same in both.
+
 Both methods run on the same thread as `update()`, right before the first market event of the new source (or, for a
 detach, before the first event the run no longer reads), so they see the strategy's state exactly as it was at that point
 and can call anything `update()` can, an `emitBuy`/`emitSell` included. A signal emitted while `isWarmingUp()` is true is

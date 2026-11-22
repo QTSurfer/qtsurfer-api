@@ -549,6 +549,12 @@ Inside either body `$context` is the attachment, with these accessors and nothin
 | `$context.isWarmingUp()` | whether the attachment has a warm-up to replay (`warmFrom` above `0`) |
 | `$context.getReason()` | never `null`: `""` in `onAttach`; in `onDetach` one of `"OWNER"`, `"REFUSED"`, `"POOL_GONE"`, `"CAPACITY"` or `"FUNDS"`. A source dropped for lack of data, and a `dex` pool of a pair the run already reads (`SAME_PAIR` on the attachment), arrive as `"REFUSED"` |
 
+For a `dex` source the attachment reads one instrument, the pair the pool's candles carry (`Rocco/WETH`), and `onAttach`
+runs when the pool delivers its first candle, just before it ([The instrument of a pool](live.md#the-instrument-of-a-pool)).
+Attached with `resolveInstrument: false`, `onAttach` runs at once and `$context.getInstrument(0)` is a stand-in,
+`<address>/<exchange>:<segment>`; `onDetach` then carries the pair if the pool delivered one. Pair the two hooks by
+`$context.getId()`, the same in both.
+
 Compare with `"OWNER".equals($context.getReason())`, which reads the same whatever the value. As in `onCommand`, nothing
 a window body has (`actual`, `$indicator`, `value(...)`, the ambient `store`) is in scope, because the attachment is
 not one instrument already chosen for you; every `param` is readable and settable, `getStateStore("<symbol>")` reaches

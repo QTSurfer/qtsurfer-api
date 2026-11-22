@@ -7,6 +7,25 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ## [Unreleased]
 
+## [0.128.64] — 2026-11-22
+
+### Added
+
+- **`resolveInstrument`** on an attachment (`POST /live/{runId}/attachments`) and on a subscription's run
+  (`POST /signals/subscriptions/{subscriptionId}/runs`), `true` by default, shown on `LiveAttachment` and on the run of a
+  subscription: how the strategy is told of a `dex` pool. With `true` its `onAttach` runs when the pool delivers its first
+  candle, with the pair the candles carry; with `false`, at once, with a stand-in instrument made of the pool's address and
+  `<exchange>:<segment>`. A centralized exchange's source accepts the field and ignores it. See "The instrument of a pool" in
+  the live execution guide.
+- **`instrument.id`** on the signals of a `dex` run (`LiveSignalInstrument`): the contract the signal is about, the pool's
+  address or the token's mint. The `symbol` does not identify a token, since another can be issued under the same one.
+
+### Changed
+
+- The context of `onAttach` and `onDetach` of a `dex` source now carries its instrument (before, `getInstrumentCount()` was
+  `0`), and by default `onAttach` runs when the pool delivers its first candle instead of when the source takes effect. Both
+  guides say so.
+
 ## [0.128.63] — 2026-11-22
 
 ### Changed
