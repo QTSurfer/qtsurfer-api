@@ -7,6 +7,16 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ## [Unreleased]
 
+## [0.128.62] — 2026-11-22
+
+### Added
+
+- **`uses pro.*` brings in all seventy-six pro indicators**, up from twelve: the statistics and risk families, the classic oscillators,
+  channels and moving averages. `uses pro.<name>` brings in any one. The QTScript guide has a row for each, with its forms, the
+  indicator it registers and the others registered beside it, and says which of them read whole bars (thirty-six) and which read the
+  close (forty). A call that needs whole bars on a `ticker` strategy is warned about, as before. A window on a line that registers
+  several indicators attaches to the first, whichever pro indicator it is.
+
 ## [0.128.61] — 2026-11-21
 
 ### Added
