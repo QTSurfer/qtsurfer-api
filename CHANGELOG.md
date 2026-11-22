@@ -7,6 +7,14 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ## [Unreleased]
 
+## [0.128.63] — 2026-11-22
+
+### Changed
+
+- **Connors RSI smooths its two RSIs with Wilder's averages by default**, as it is usually defined; it used Cutler's simple averages. A strategy
+  that calls `connorsRsi` gets other values than before, in a backtest, a sweep and a live run alike. `connorsRsi(String, int, int, int, boolean)`
+  is the form that chooses: `true` takes the simple averages (the old values), `false` is the default. The QTScript guide lists the form.
+
 ## [0.128.62] — 2026-11-22
 
 ### Added

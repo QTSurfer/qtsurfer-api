@@ -175,7 +175,7 @@ their bare name, like any other indicator.
 | `choppinessIndex` | `choppinessIndex()` · `choppinessIndex(String)` · `choppinessIndex(int)` · `choppinessIndex(String, int)` | `chop14` |  | bars |
 | `cmf` | `cmf()` · `cmf(int)` · `cmf(String, int)` | `cmf20` |  | bars |
 | `cmo` | `cmo()` · `cmo(String)` · `cmo(int)` · `cmo(String, int)` | `cmo14` |  | close |
-| `connorsRsi` | `connorsRsi()` · `connorsRsi(String)` · `connorsRsi(int, int, int)` · `connorsRsi(String, int, int, int)` | `crsi3_2_100` |  | close |
+| `connorsRsi` | `connorsRsi()` · `connorsRsi(String)` · `connorsRsi(int, int, int)` · `connorsRsi(String, int, int, int)` · `connorsRsi(String, int, int, int, boolean)` | `crsi3_2_100` |  | close |
 | `coppockCurve` | `coppockCurve()` · `coppockCurve(String)` · `coppockCurve(int, int, int)` · `coppockCurve(String, int, int, int)` | `coppock14_11_10` |  | close |
 | `dema` | `dema(int)` · `dema(String, int)` | `dema14`, from `dema(14)` (no form without arguments) |  | close |
 | `detrendedPriceOscillator` | `detrendedPriceOscillator()` · `detrendedPriceOscillator(String)` · `detrendedPriceOscillator(int)` · `detrendedPriceOscillator(String, int)` | `dpo20` |  | close |
@@ -240,7 +240,8 @@ is the one the call written there registers.
 
 Five of them, `knowSureThing`, `acceleratorOscillator`, `awesomeOscillator`, `relativeVigorIndex` and `stochasticOscillator`, smooth with
 moving averages by default. Their form with a `boolean` at the end keeps the discrete averages instead when the value is `true`, and `false`
-is the default. `connorsRsi` counts, in its percent rank, only the values strictly less than the current one.
+is the default. `connorsRsi` smooths its two RSIs with Wilder's averages by default; its form with a `boolean` at the end takes Cutler's simple averages instead when
+the value is `true`, and `false` is the default. In its percent rank it counts only the values strictly less than the current one.
 
 The `double` of the four volatility estimators is the annualization factor. With other arguments the name follows the same
 pattern: `mfi(20)` registers `mfi20`, `kurtosis(30)` registers `kurt30`, `ichimoku(7, 22, 44)` registers `ichi7_22_44`, and
