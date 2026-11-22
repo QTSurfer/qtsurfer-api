@@ -58,7 +58,7 @@ on a one-minute window, emitting a signal on each threshold.
 | `init { }` | Optional. Plain Java run once when the strategy is built — engine setters | `init { setPercentGain(0.5); }` |
 | `instruments` | Optional. Which markets: pairs (`BASE/QUOTE`, either side may be `*`), regular expressions (`~"..."`, matched against the whole symbol), or a Java body for full control | `instruments */usdt` · `instruments btc/usdt, eth/*` |
 | `uses` | Optional. Brings the [pro indicators](#the-pro-indicators-uses) into the file, so `setup:` can call them by their bare name. Several `uses` lines add up | `uses pro.*` · `uses pro.adx, pro.ichimoku` |
-| `setup:` | The indicators, **one builder call per line** (the free catalogue of the builder a Java strategy uses, [listed below](#what-goes-under-setup)). The lines under `setup:` are indented, and the first line back at column 0 ends the section | `ema(12)` · `bollinger(20, 2)` |
+| `setup:` | The indicators, **one builder call per line** (the catalogue of the builder a Java strategy uses, [listed below](#what-goes-under-setup)). The lines under `setup:` are indented, and the first line back at column 0 ends the section | `ema(12)` · `bollinger(20, 2)` |
 | Windows | Where the logic goes — see below | `rsi(14) window m1 { ... }` |
 | `onCommand { }` | Optional, at most one per file. Runs when the run receives a [command](live.md#commands) — see below | `onCommand { if ("flatten".equals($command)) ... }` |
 
@@ -434,6 +434,7 @@ Your Java, plus what is already in scope — nothing needs importing:
 | `value("name")` | any other indicator's current value |
 | `$indicator` | the name of the indicator this window is on, as a `String` — [see above](#which-indicator-a-window-is-on) |
 | `store` | the per-instrument state shared by every window of that instrument |
+| `$globalStore` | the strategy's own state, for what belongs to no single instrument — [see below](#the-global-store-globalstore) |
 | `emitBuy(price)`, `emitSell(price)`, `emitInfo(key, values…)`, `emitSignal(signal)` | signal emission |
 | every `param` | readable by its name |
 
@@ -464,6 +465,32 @@ setup:
 
 `value("ema" + fast)` reads any registered indicator by name; `store` is the same store every window of
 the instrument shares.
+
+### The global store: `$globalStore`
+
+`store` is one instrument's. State that belongs to the strategy as a whole (a count across every instrument, a flag that a command
+sets) goes in the **global store**, `$globalStore`: one store for the strategy, the same object in every window of every instrument
+and in the hooks.
+
+- It is in scope in a window body, in `onCommand { }`, in `onAttach { }` and in `onDetach { }`.
+- It is a namespace of its own: a key set through `$globalStore` is never seen through `store` or through
+  `getStateStore("<symbol>")`, and the other way round.
+- It is not in scope in `init { }` or `instruments { }`, which run before the platform starts the strategy: using it there is a
+  compile error that says so.
+- Like any `StateStore` it is memory: a restart empties it.
+
+```
+setup:
+  rsi(14) window m5 {
+    if (actual < 30 && !$globalStore.is("long")) {
+      $globalStore.set("long");
+      emitBuy(price);
+    }
+  }
+onCommand {
+  if ("flatten".equals($command)) $globalStore.set("flat");
+}
+```
 
 ## Candles
 

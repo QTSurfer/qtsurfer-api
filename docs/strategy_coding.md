@@ -303,6 +303,35 @@ warm-up period, such as an RSI or an EMA, has not settled in its first windows e
 a window cannot hand you: a flag, a counter, a value from several windows ago. A listener that only needs the
 store, `prev` and `actual` can be a lambda; one that emits a signal extends `AbstractWindowListener`, as above.
 
+## The global store
+
+`store` is one instrument's. State of the strategy as a whole (a count across every instrument, a flag that a command sets) goes in the
+**global store**: `getStateStore()` with no argument, on the strategy, returns it. It is never `null` and never an `Optional`, unlike
+`getStateStore(Instrument)`, which is an instrument's. A window listener that extends `AbstractWindowListener` reaches the same store
+with `getGlobalState()`.
+
+It is a namespace of its own: a key set in one is never seen through the other. It is memory, like any `StateStore`: a restart empties
+it. The platform binds it when it starts the strategy, so read it from a listener, `update()`, `handle(CommandRequest)`, `onAttach` or
+`onDetach`, not from the constructor.
+
+```java
+@Override
+public void handle(CommandRequest request) {
+    getStateStore().set("flatten");            // the strategy's own store
+}
+
+// in a listener that extends AbstractWindowListener
+@Override
+public void onChange(StateStore store, double prev, double actual) {
+    if (getGlobalState().is("flatten")) {
+        return;
+    }
+    store.set("seen");                         // this instrument's store
+}
+```
+
+[QTScript](qtscript.md#the-global-store-globalstore) writes the same store as `$globalStore`.
+
 ## Reading indicators from update()
 
 A strategy that overrides `update()` instead of using windows advances the indicators itself with

@@ -7,6 +7,18 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ## [Unreleased]
 
+## [0.128.66] — 2026-11-22
+
+### Added
+
+- **`$globalStore`** in QTScript, in a window, `onCommand`, `onAttach` and `onDetach`: the strategy's own state store, for state that
+  belongs to no single instrument, a namespace apart from a window's `store`. In Java it is `getStateStore()` with no argument (and
+  `getGlobalState()` in a window listener). It is not available in `init` or `instruments`; the compiler says so.
+
+### Changed
+
+- The QTScript guide no longer calls the builder's catalogue "free": only the pro indicators are marked as a tier.
+
 ## [0.128.65] — 2026-11-22
 
 ### Added
