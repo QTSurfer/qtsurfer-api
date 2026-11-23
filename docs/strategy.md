@@ -32,6 +32,8 @@ curl -X POST https://api.qtsurfer.net/v1/strategy \
 ```json
 {
   "strategyId": "2ul144qe9tlwzu5anhwvc6",
+  "name": "RsiCross",
+  "language": "java",
   "declaredProperties": [
     {"name": "rsi.period", "description": "RSI period", "defaultValue": "14",
      "reflected": true, "min": 2, "max": 50, "step": 1},
@@ -40,6 +42,11 @@ curl -X POST https://api.qtsurfer.net/v1/strategy \
   "requires": []
 }
 ```
+
+`name` is what the strategy calls itself, read from its source: the name in the `strategy "Name"` header of a QTScript strategy, the
+public class of a Java one. It is absent when the source gives none. `language` is `qtscript` or `java`. Both come back again in
+`GET /strategy/{strategyId}` and in every entry of `GET /strategies`, so a client that lists strategies does not need to read each
+source to name one or to tell the two languages apart.
 
 `requires` lists what the strategy needs from your plan: `["indicators.pro"]` when it uses the
 [pro indicators](qtscript.md#the-pro-indicators-uses) and `[]` when it needs nothing more. Registering is accepted on every plan;
@@ -181,6 +188,8 @@ survived the first event of a short synthetic run — a floor, not a guarantee. 
 | Field | Notes |
 |---|---|
 | `validation` | `not_validated` \| `pending` \| `passed` \| `failed` |
+| `name` | what the strategy calls itself: the name in the `strategy "Name"` header of a QTScript strategy, the public class of a Java one. Absent when the source gives none |
+| `language` | `qtscript` or `java` |
 | `compiledAt` | when the live compilation was produced |
 | `requiredSources` | market data the strategy needs (`Ticker`, `KLine`, `FundingRate`), read off the compiled class. **Absent is not "needs nothing"** — absent means the platform couldn't establish the answer without constructing the strategy (a `MultiSourceStrategy`, a class overriding `getMarketDataSource()`, or anything registered before this field existed). Re-registering the source fills it in |
 | `validatedAt` | when the verdict was recorded; absent until there is one |
@@ -194,6 +203,8 @@ survived the first event of a short synthetic run — a floor, not a guarantee. 
 ```json
 {
   "strategyId": "6bsh31ikwkuivhtgcoa6s4",
+  "name": "RsiCross",
+  "language": "java",
   "validation": "passed",
   "compiledAt": "2026-08-04T16:23:04Z",
   "requiredSources": ["Ticker"],
@@ -230,8 +241,8 @@ curl https://api.qtsurfer.net/v1/strategies -H "Authorization: Bearer $TOKEN"
 ```json
 {
   "strategies": [
-    {"strategyId": "6bsh31ikwkuivhtgcoa6s4", "compiledAt": "2026-08-19T10:15:00Z", "requiredSources": ["Ticker"]},
-    {"strategyId": "2ul144qe9tlwzu5anhwvc6", "compiledAt": "2026-08-12T09:02:11Z"}
+    {"strategyId": "6bsh31ikwkuivhtgcoa6s4", "name": "RsiCross", "language": "java", "compiledAt": "2026-08-19T10:15:00Z", "requiredSources": ["Ticker"]},
+    {"strategyId": "2ul144qe9tlwzu5anhwvc6", "name": "Detach one of two", "language": "qtscript", "compiledAt": "2026-08-12T09:02:11Z"}
   ]
 }
 ```

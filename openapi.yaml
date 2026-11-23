@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: QTSurfer API
   summary: QTSurfer backend services API
-  version: 0.128.66
+  version: 0.128.67
   contact:
     name: QTSurfer Support
     email: support@qtsurfer.com
@@ -878,6 +878,10 @@ paths:
                 properties:
                   strategyId:
                     $ref: '#/components/schemas/strategyId'
+                  name:
+                    $ref: '#/components/schemas/StrategyName'
+                  language:
+                    $ref: '#/components/schemas/StrategyLanguage'
                   declaredProperties:
                     type: array
                     description: |
@@ -898,6 +902,8 @@ paths:
                       enum: [indicators.pro]
               example:
                 strategyId: 6bsh31ikwkuivhtgcoa6s4
+                name: RsiCross
+                language: java
                 requires: []
                 declaredProperties:
                   - name: rsi.period
@@ -7465,6 +7471,18 @@ components:
             real run (`execute`) is a clean bill of health, while an empty list from
             `compile-dry-run` is only a lower bound over a bounded synthetic series.
           example: compile-dry-run
+    StrategyName:
+      type: string
+      description: |
+        What the strategy calls itself, read from its source: the name in the `strategy "Name"` header of a
+        QTScript strategy, the public class of a Java one. It is the name to show for it wherever it is listed.
+        Absent, not empty, when the source gives none (a Java source without a public class).
+      example: Detach one of two
+    StrategyLanguage:
+      type: string
+      enum: [java, qtscript]
+      description: What the source of the strategy is written in.
+      example: qtscript
     StrategySummary:
       type: object
       description: |
@@ -7476,6 +7494,10 @@ components:
       properties:
         strategyId:
           $ref: '#/components/schemas/strategyId'
+        name:
+          $ref: '#/components/schemas/StrategyName'
+        language:
+          $ref: '#/components/schemas/StrategyLanguage'
         compiledAt:
           type: string
           format: date-time
@@ -7505,6 +7527,10 @@ components:
       properties:
         strategyId:
           $ref: '#/components/schemas/strategyId'
+        name:
+          $ref: '#/components/schemas/StrategyName'
+        language:
+          $ref: '#/components/schemas/StrategyLanguage'
         validation:
           type: string
           enum: [not_validated, pending, passed, failed]

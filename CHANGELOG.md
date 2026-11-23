@@ -7,6 +7,16 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ## [Unreleased]
 
+## [0.128.67] — 2026-11-23
+
+### Added
+
+- **`name` and `language` of a strategy**, in the answer of `POST /strategy`, in `GET /strategy/{strategyId}` and in every entry of
+  `GET /strategies`. The name is what the strategy calls itself: the name in the `strategy "Name"` header of a QTScript strategy,
+  the public class of a Java one; it is absent when the source gives none. The language is `qtscript` or `java`. Until now a client that
+  listed strategies had to read each source to name one, and a QTScript strategy could only be told from a Java one by its code. Strategies
+  registered before today have their name from the same place.
+
 ## [0.128.66] — 2026-11-22
 
 ### Added
