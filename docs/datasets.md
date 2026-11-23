@@ -9,12 +9,18 @@ Backtest against a CSV, parquet, or lastra file you upload instead of a managed 
 | `POST` | `/datasets` | Create a dataset + first upload session |
 | `GET` | `/datasets` | List your datasets |
 | `GET` | `/datasets/{datasetId}` | Get one |
+| `PATCH` | `/datasets/{datasetId}` | Move into a [collection](#collections), or back to the root |
 | `DELETE` | `/datasets/{datasetId}` | Delete |
 | `POST` | `/datasets/{datasetId}/uploads` | Open a new upload session for an existing dataset |
 | `POST` | `/datasets/{datasetId}/uploads/{uploadId}/finalize` | Trigger ingest |
 | `GET` | `/datasets/{datasetId}/uploads/{uploadId}` | Poll upload/ingest state |
 | `POST` | `/datasets/imports` | Create a dataset by fetching history instead of uploading it |
 | `GET` | `/datasets/{datasetId}/imports/{importId}` | Poll fetch/ingest state |
+| `POST` | `/collections` | Create a [collection](#collections) |
+| `GET` | `/collections` | List your collections |
+| `GET` | `/collections/{collectionId}` | Get one |
+| `PATCH` | `/collections/{collectionId}` | Rename it or change its description |
+| `DELETE` | `/collections/{collectionId}` | Delete it, keeping its datasets |
 
 A dataset holds one instrument, and its `type` — `ticker` or `klines` — says what its rows are: it
 is read from the data when an upload or an import has been ingested, see [What `type`
@@ -30,6 +36,7 @@ URL your client `PUT`s the file to directly, no API credentials involved in that
 |---|---|---|
 | `name` | string | required, unique among your datasets. `409` if already taken |
 | `instrument` | string | required, plain spot pair |
+| `collectionId` | string | optional, the [collection](#collections) to create the dataset in. `404` if it is not one of yours |
 
 ```bash
 curl -X POST https://api.qtsurfer.net/v1/datasets \
@@ -546,6 +553,7 @@ don't need a second call to see what a dataset covers.
 | `bytes`, `rows`, `gaps`, `largestGapSteps` | the current version's own stored size, row count, gap count and largest gap (in steps of its cadence). **Present only when `status` is `ready`** — see [`DatasetVersion`](#datasetversion--one-successfully-ingested-upload) for what `bytes` measures |
 | `error` | why the most recent attempt failed. **Present only when `status` is `failed`** |
 | `meta` | how the dataset came to be, a flat map of text to text (see [`meta`](#meta--how-a-dataset-came-to-be)). **Always present**, `{}` when nothing was recorded |
+| `collectionId` | the [collection](#collections) the dataset is in. **Absent when the dataset is at the root**, never `null` |
 
 `GET /datasets/{datasetId}` alone adds `dataUrl`/`dataFormat` (same meaning as on
 [`DatasetVersion`](#datasetversion--one-successfully-ingested-upload)) once the current version is
@@ -601,6 +609,85 @@ curl https://api.qtsurfer.net/v1/datasets -H "Authorization: Bearer $TOKEN"
 `GET /datasets?includeDeleted=true` also lists the datasets you've deleted, each with the
 `deletedAt` it was deleted at — handy when keeping your own copy of the list in sync, so a
 deleted dataset shows up as deleted instead of just disappearing.
+
+`GET /datasets?collectionId=dc_3f9a1c2e7b0d4a5f` lists the datasets of one [collection](#collections);
+`collectionId=none` lists the ones that are in no collection. Datasets created at the same instant keep
+the same order from one call to the next, so a listing narrowed to a collection is the full order,
+filtered. The parameter combines with `includeDeleted`.
+
+## Collections
+
+A collection is a folder for your datasets. It is one level deep: it holds datasets, never other
+collections.
+
+* A dataset is in **at most one** collection. One that is in none is at the **root**.
+* A collection may hold datasets of any `type` and any instrument; nothing is checked when a dataset
+  goes in or moves.
+* A dataset's `name` stays unique among **all** your datasets, not per collection: moving a dataset
+  never renames it and never clashes with the datasets of another collection.
+* A collection's `name` is unique among your collections and is compared as written (`Majors` and
+  `majors` are different names). It is trimmed and has 1 to 100 characters; the optional
+  `description` has up to 500.
+* **Deleting a collection never deletes data.** `DELETE /collections/{collectionId}` removes the
+  collection for good and its name is free again at once; the datasets that were in it are kept, and
+  go back to the root.
+
+| Field | Notes |
+|---|---|
+| `collectionId` | opaque id, starting with `dc_` |
+| `name`, `createdAt`, `updatedAt` | always present |
+| `description` | **absent when the collection has none** |
+| `datasetCount` | how many datasets are in it now; a dataset you have deleted does not count |
+| `datasetCountByType` | the same datasets counted by `type` (`{"klines": 2, "ticker": 1}`). **Absent when the collection has no datasets.** The keys are in no particular order |
+
+```bash
+# Create a collection
+curl -X POST https://api.qtsurfer.net/v1/collections \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Majors","description":"BTC and ETH, one-minute bars"}'
+# → 201 {"collectionId":"dc_3f9a1c2e7b0d4a5f","name":"Majors","description":"BTC and ETH, one-minute bars","createdAt":"...","updatedAt":"...","datasetCount":0}
+
+# Move a dataset into it, and back out to the root
+curl -X PATCH https://api.qtsurfer.net/v1/datasets/$DATASET_ID \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"collectionId":"dc_3f9a1c2e7b0d4a5f"}'
+curl -X PATCH https://api.qtsurfer.net/v1/datasets/$DATASET_ID \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"collectionId":null}'
+```
+
+`GET /collections` returns `{"collections": [...]}`: all of your collections in one answer, with no
+paging, ordered by `name` and then `collectionId`; an empty array when you have none. Because a
+collection is deleted for good there is no `includeDeleted`: a collection that is not in the list no
+longer exists. `PATCH /collections/{collectionId}` takes `name`, `description` or both; a field left
+out is kept, `description: null` (or a blank one) removes the description, and `name` cannot be
+`null`. `DELETE` answers `{"collectionId": "...", "deleted": true}`.
+
+**Putting datasets in a collection.** `POST /datasets` and `POST /datasets/imports` take an optional
+`collectionId` (`null` is the root), and their answer carries `collectionId` only when you sent one.
+`PATCH /datasets/{datasetId}` moves an existing dataset and takes exactly `{"collectionId": "dc_..."}`
+or `{"collectionId": null}`: a body without that field, or with any other, is `400`. It answers the
+dataset, as `GET /datasets/{datasetId}` does; moving a dataset to where it already is succeeds and
+changes nothing. A deleted dataset keeps its place in its collection, and a listing with
+`includeDeleted=true` shows it there.
+
+**Errors.**
+
+| Status | When |
+|---|---|
+| `400` | a missing body, a blank or too long `name`, a too long `description`, a `collectionId` that is not a text (or is empty in a `PATCH`, or in the `GET /datasets` filter), a `PATCH` of a dataset with any field but `collectionId` |
+| `404` | the collection does not exist **or is not yours**: the two are answered the same, and the message names the collection (`Collection not found: dc_...`), so that ids of other accounts are never confirmed. On `POST /datasets` and `POST /datasets/imports` it is answered before anything is created or counted against your plan. A dataset that does not exist (or is deleted) is the usual dataset `404` |
+| `409` | you already have a collection with that `name` (on creation or on rename) |
+| `413` | the request body is too large |
+| `429` | you have reached the number of collections an account can keep: `reason: COLLECTIONS_LIMIT`, `retryable: false`, no `Retry-After`. Delete a collection to make room. It is a limit of the platform and not of a plan, so an upgrade link is not offered |
+
+```json
+{"code": 429, "message": "Collection limit reached. Delete a collection first.", "reason": "COLLECTIONS_LIMIT", "retryable": false}
+```
+
+The collection routes need the `datasets` scope: `read` for the `GET`s and `write` for `POST`,
+`PATCH` and `DELETE` (see [Authentication and scopes](auth.md)).
 
 ## Getting a dataset
 

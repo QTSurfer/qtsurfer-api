@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: QTSurfer API
   summary: QTSurfer backend services API
-  version: 0.128.67
+  version: 0.128.68
   contact:
     name: QTSurfer Support
     email: support@qtsurfer.com
@@ -2204,6 +2204,13 @@ paths:
                   example: "My BTC ticks"
                 instrument:
                   $ref: '#/components/schemas/Instrument'
+                collectionId:
+                  type: ['string', 'null']
+                  description: |
+                    Optional. The collection to create the dataset in; `null`, or leaving it out,
+                    creates it at the root. An id that is not one of your collections is `404`, and
+                    nothing is created. The `201` carries `collectionId` only when you sent one.
+                  example: "dc_3f9a1c2e7b0d4a5f"
             example:
               name: "My BTC ticks"
               instrument: "BTC/USDT"
@@ -2224,13 +2231,15 @@ paths:
                   url: "https://storage.qtsurfer.com/00000000-.../uploads/up_1a2b3c4d5e6f7a8b/raw.csv?..."
                   expiresInMinutes: 15
         '400':
-          description: Invalid request, or `instrument` is not a plain spot pair
+          description: Invalid request, `instrument` is not a plain spot pair, or `collectionId` is not a text
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResponseError'
         '403':
           $ref: '#/components/responses/InsufficientScope'
+        '404':
+          $ref: '#/components/responses/CollectionNotFound'
         '409':
           description: You already have a dataset with this `name`
           content:
@@ -2257,6 +2266,10 @@ paths:
         With `includeDeleted=true`, datasets you have deleted are listed too, each with the
         `deletedAt` it was deleted at — useful to keep a copy of your list in sync, telling a
         deleted dataset apart from one that never existed.
+
+        Datasets created at the same instant keep the same order from one call to the next, and so
+        do the datasets of a collection: a listing narrowed with `collectionId` is that order,
+        filtered.
       parameters:
         - name: includeDeleted
           in: query
@@ -2267,6 +2280,17 @@ paths:
           schema:
             type: boolean
             default: false
+        - name: collectionId
+          in: query
+          required: false
+          description: |
+            Lists only the datasets of one collection: pass its id. `none` lists the datasets that
+            are in no collection, the root. Leave it out to list every dataset, wherever it is. It
+            combines with `includeDeleted`. An id that is not one of your collections is `404`
+            rather than an empty list; an empty value is `400`.
+          schema:
+            type: string
+            example: "dc_3f9a1c2e7b0d4a5f"
       responses:
         '200':
           description: Your datasets
@@ -2298,8 +2322,16 @@ paths:
                     rows: 86400
                     gaps: 0
                     largestGapSteps: 0
+        '400':
+          description: '`collectionId` is present but empty'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
         '403':
           $ref: '#/components/responses/InsufficientScope'
+        '404':
+          $ref: '#/components/responses/CollectionNotFound'
       security:
         - bearerAuth: []
       tags:
@@ -2358,6 +2390,92 @@ paths:
         - bearerAuth: []
       tags:
         - Dataset
+    patch:
+      operationId: moveDataset
+      summary: Move a dataset into a collection, or back to the root
+      description: |
+        The body is exactly `{"collectionId": "dc_..."}` to move the dataset into that collection,
+        or `{"collectionId": null}` to take it out of its collection. Nothing else about a dataset
+        can be changed here: a body without `collectionId`, or with any other field, is `400`, so a
+        field is never silently ignored. Any `type` can go in any collection. The dataset keeps its
+        `name`, which stays unique among all your datasets, whatever collection each is in.
+
+        Answers the dataset, as `GET /datasets/{datasetId}` does. Moving a dataset to where it
+        already is succeeds and changes nothing.
+      parameters:
+        - name: datasetId
+          in: path
+          required: true
+          description: The id returned by `POST /datasets`
+          schema:
+            type: string
+            example: "ds_3f9a1c2e7b0d4a5f"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DatasetMoveRequest'
+            example:
+              collectionId: "dc_3f9a1c2e7b0d4a5f"
+      responses:
+        '200':
+          description: The dataset, now in the collection (no `collectionId` when it is at the root)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatasetWithLinks'
+              example:
+                datasetId: "ds_3f9a1c2e7b0d4a5f"
+                name: "My BTC ticks"
+                type: "ticker"
+                instrument: "BTC/USDT"
+                collectionId: "dc_3f9a1c2e7b0d4a5f"
+                createdAt: "2026-08-20T09:00:00Z"
+                currentVersionId: "dsv_8e2b4f19c6a03d7e"
+                updatedAt: "2026-08-20T09:04:12Z"
+                from: "2026-03-01T00:00:00Z"
+                to: "2026-03-08T00:00:00Z"
+                cadence: "1m"
+                timestampUnit: "iso"
+                status: "ready"
+                bytes: 4831022
+                rows: 86400
+                gaps: 0
+                largestGapSteps: 0
+                dataUrl: "https://storage.qtsurfer.com/00000000-.../ds_3f9a1c2e7b0d4a5f/dsv_8e2b4f19c6a03d7e/ticker_BTC_USDT_1700000000000_1700086400000_1m.lastra?..."
+                dataFormat: "lastra"
+                _links:
+                  self:
+                    href: "/v1/datasets/ds_3f9a1c2e7b0d4a5f"
+        '400':
+          description: |
+            The request has no body, `collectionId` is missing, is not a text or `null`, or is
+            empty, or the body has any other field.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+        '403':
+          $ref: '#/components/responses/InsufficientScope'
+        '404':
+          description: |
+            No such dataset for this user, or it is deleted; or `collectionId` is not one of your
+            collections (the message then names the collection).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+        '413':
+          description: The request body is too large. Every endpoint that reads a request body caps it, and the message names the cap.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+      security:
+        - bearerAuth: []
+      tags:
+        - Dataset
     delete:
       operationId: deleteDataset
       summary: Delete a dataset
@@ -2398,6 +2516,238 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResponseError'
+      security:
+        - bearerAuth: []
+      tags:
+        - Dataset
+  '/collections':
+    post:
+      operationId: createCollection
+      summary: Create a collection
+      description: |
+        Creates an empty collection, a folder to keep datasets in. A collection is one level deep:
+        it holds datasets and nothing else. The Datasets guide explains how collections work.
+
+        `name` is required; it is trimmed, and the trimmed text has 1 to 100 characters. It is
+        unique among your collections, compared as written (`Majors` and `majors` are two names).
+        `description` is optional, up to 500 characters; a blank one is the same as none. The `201`
+        is the collection, with `datasetCount` `0`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollectionCreateRequest'
+            example:
+              name: "Majors"
+              description: "BTC and ETH, one-minute bars"
+      responses:
+        '201':
+          description: Collection created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Collection'
+              example:
+                collectionId: "dc_3f9a1c2e7b0d4a5f"
+                name: "Majors"
+                description: "BTC and ETH, one-minute bars"
+                createdAt: "2026-11-23T09:00:00Z"
+                updatedAt: "2026-11-23T09:00:00Z"
+                datasetCount: 0
+        '400':
+          description: |
+            The request has no body, `name` is missing, blank or longer than allowed, or
+            `description` is longer than allowed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+        '403':
+          $ref: '#/components/responses/InsufficientScope'
+        '409':
+          description: You already have a collection with this `name`
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+        '413':
+          description: The request body is too large. Every endpoint that reads a request body caps it, and the message names the cap.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+        '429':
+          description: |
+            You already have as many collections as an account can keep: `reason: COLLECTIONS_LIMIT`.
+            Delete a collection to make room. It is a limit of the platform, not of a plan, so
+            changing plan does not lift it. `retryable` is `false` and there is no `Retry-After`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+              example:
+                code: 429
+                message: 'Collection limit reached. Delete a collection first.'
+                reason: COLLECTIONS_LIMIT
+                retryable: false
+      security:
+        - bearerAuth: []
+      tags:
+        - Dataset
+    get:
+      operationId: listCollections
+      summary: List your collections
+      description: |
+        Every collection you have, in one response: there is no paging. Ordered by `name`, then by
+        `collectionId`. Never a `404`: an empty array if you have none. A collection is deleted for
+        good, so there is no `includeDeleted`: one that is not in the list no longer exists.
+      responses:
+        '200':
+          description: Your collections
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionList'
+              example:
+                collections:
+                  - collectionId: "dc_3f9a1c2e7b0d4a5f"
+                    name: "Majors"
+                    description: "BTC and ETH, one-minute bars"
+                    createdAt: "2026-11-23T09:00:00Z"
+                    updatedAt: "2026-11-23T09:20:00Z"
+                    datasetCount: 3
+                    datasetCountByType:
+                      klines: 2
+                      ticker: 1
+                  - collectionId: "dc_a7c20e51d94b3f68"
+                    name: "Scratch"
+                    createdAt: "2026-11-23T09:05:00Z"
+                    updatedAt: "2026-11-23T09:05:00Z"
+                    datasetCount: 0
+        '403':
+          $ref: '#/components/responses/InsufficientScope'
+      security:
+        - bearerAuth: []
+      tags:
+        - Dataset
+  '/collections/{collectionId}':
+    get:
+      operationId: getCollection
+      summary: Get a collection by id
+      description: One of your collections, with the count of the datasets in it.
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      responses:
+        '200':
+          description: The collection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Collection'
+              example:
+                collectionId: "dc_3f9a1c2e7b0d4a5f"
+                name: "Majors"
+                createdAt: "2026-11-23T09:00:00Z"
+                updatedAt: "2026-11-23T09:20:00Z"
+                datasetCount: 3
+                datasetCountByType:
+                  klines: 2
+                  ticker: 1
+        '403':
+          $ref: '#/components/responses/InsufficientScope'
+        '404':
+          $ref: '#/components/responses/CollectionNotFound'
+      security:
+        - bearerAuth: []
+      tags:
+        - Dataset
+    patch:
+      operationId: updateCollection
+      summary: Rename a collection or change its description
+      description: |
+        Send `name`, `description` or both. A field you leave out is left as it is. `description:
+        null`, or a blank one, removes the description; `name` cannot be `null`. The limits are
+        those of creation. A body with neither field is `400`; any other field is ignored. Answers
+        the collection as it is after the change. A rename frees the old name at once.
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CollectionUpdateRequest'
+            example:
+              name: "Majors 2026"
+              description: null
+      responses:
+        '200':
+          description: The collection, updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Collection'
+              example:
+                collectionId: "dc_3f9a1c2e7b0d4a5f"
+                name: "Majors 2026"
+                createdAt: "2026-11-23T09:00:00Z"
+                updatedAt: "2026-11-23T09:30:00Z"
+                datasetCount: 3
+                datasetCountByType:
+                  klines: 2
+                  ticker: 1
+        '400':
+          description: |
+            The request has no body, neither `name` nor `description` is in it, `name` is `null`,
+            blank or longer than allowed, or `description` is longer than allowed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+        '403':
+          $ref: '#/components/responses/InsufficientScope'
+        '404':
+          $ref: '#/components/responses/CollectionNotFound'
+        '409':
+          description: You already have another collection with this `name`
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+        '413':
+          description: The request body is too large. Every endpoint that reads a request body caps it, and the message names the cap.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponseError'
+      security:
+        - bearerAuth: []
+      tags:
+        - Dataset
+    delete:
+      operationId: deleteCollection
+      summary: Delete a collection
+      description: |
+        Deletes the collection for good; its name is free again at once. **The datasets in it are
+        kept**: they go back to the root, as if they had never been in a collection. Nothing else
+        about them changes.
+      parameters:
+        - $ref: '#/components/parameters/CollectionId'
+      responses:
+        '200':
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionDeleted'
+              example:
+                collectionId: "dc_3f9a1c2e7b0d4a5f"
+                deleted: true
+        '403':
+          $ref: '#/components/responses/InsufficientScope'
+        '404':
+          $ref: '#/components/responses/CollectionNotFound'
       security:
         - bearerAuth: []
       tags:
@@ -2753,7 +3103,7 @@ paths:
             the platform's or outside `pool.*`/`user.*`, or is over one of its limits; a candle import whose `from` is earlier than the
             history candles reach back; the requested range exceeds your tier's import
             range ceiling; the requested range's rough size estimate exceeds your tier's row limit;
-            `dex.network`/`dex.id` not one of their supported values; `dex.contract`/`dex.factory`
+            `collectionId` is not a text; `dex.network`/`dex.id` not one of their supported values; `dex.contract`/`dex.factory`
             fail basic shape validation; or, when `cadence` is omitted, `dex.id`/`dex.version`
             missing. Whether the pool/pair actually exists and resolves — and, for a candle
             `cadence`, whether that combination is actually servable on the requested `network` —
@@ -2788,6 +3138,8 @@ paths:
                 upgradeUrl: https://example.com/upgrade
         '403':
           $ref: '#/components/responses/InsufficientScope'
+        '404':
+          $ref: '#/components/responses/CollectionNotFound'
         '409':
           description: You already have a dataset with this `name`
           content:
@@ -5390,6 +5742,26 @@ components:
             code: insufficient_scope
             message: This API key does not have the scope datasets:write.
             required: datasets:write
+    CollectionNotFound:
+      description: |
+        No such collection for this user. A collection that is not yours is answered exactly as one
+        that does not exist, and the message names the collection.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ResponseError'
+          example:
+            code: 404
+            message: 'Collection not found: dc_3f9a1c2e7b0d4a5f'
+  parameters:
+    CollectionId:
+      name: collectionId
+      in: path
+      required: true
+      description: The id returned by `POST /collections`
+      schema:
+        type: string
+        example: "dc_3f9a1c2e7b0d4a5f"
   headers:
     XTsUnit:
       description: |
@@ -7628,8 +8000,14 @@ components:
           example: "ds_3f9a1c2e7b0d4a5f"
         name:
           type: string
-          description: Unique among your datasets.
+          description: Unique among your datasets, whatever collection each is in.
           example: "My BTC ticks"
+        collectionId:
+          type: string
+          description: |
+            The collection the dataset is in. Absent when it is at the root, never `null`. It
+            changes with `PATCH /datasets/{datasetId}`, and goes away when the collection is deleted.
+          example: "dc_3f9a1c2e7b0d4a5f"
         type:
           type: string
           enum: [ticker, klines]
@@ -7764,6 +8142,102 @@ components:
             A human-readable reason the most recent upload/import attempt failed. Present only
             when `status` is `failed`.
           example: "line 3: column 'close' is not a number: not-a-number"
+    Collection:
+      type: object
+      description: |
+        A folder of datasets. A dataset is in at most one collection, and a collection holds
+        datasets of any `type`.
+      required: [collectionId, name, createdAt, updatedAt, datasetCount]
+      properties:
+        collectionId:
+          type: string
+          description: Opaque id, returned by `POST /collections`.
+          example: "dc_3f9a1c2e7b0d4a5f"
+        name:
+          type: string
+          description: Unique among your collections, compared as written.
+          example: "Majors"
+        description:
+          type: string
+          description: Absent when the collection has none.
+          example: "BTC and ETH, one-minute bars"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-11-23T09:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          description: When the collection's `name` or `description` last changed.
+          example: "2026-11-23T09:20:00Z"
+        datasetCount:
+          type: integer
+          description: How many datasets are in the collection now. A dataset you have deleted does not count.
+          example: 3
+        datasetCountByType:
+          type: object
+          description: |
+            The same datasets counted by their `type` (`ticker`, `klines`): a key for each type that
+            has at least one dataset, the count as its value. Absent when the collection has no
+            datasets. The keys come in no particular order.
+          additionalProperties:
+            type: integer
+          example:
+            klines: 2
+            ticker: 1
+    CollectionList:
+      type: object
+      required: [collections]
+      properties:
+        collections:
+          type: array
+          items:
+            $ref: '#/components/schemas/Collection'
+    CollectionCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Trimmed; the trimmed text has 1 to 100 characters. `409` if you already have a collection of that name.
+          example: "Majors"
+        description:
+          type: ['string', 'null']
+          description: Optional, up to 500 characters. A blank text, or `null`, is the same as none.
+          example: "BTC and ETH, one-minute bars"
+    CollectionUpdateRequest:
+      type: object
+      description: At least one of the two fields. A field left out is not changed.
+      properties:
+        name:
+          type: string
+          description: The new name, under the same rules as on creation. Cannot be `null`.
+          example: "Majors 2026"
+        description:
+          type: ['string', 'null']
+          description: The new description, up to 500 characters. `null` or a blank text removes it.
+    CollectionDeleted:
+      type: object
+      required: [collectionId, deleted]
+      properties:
+        collectionId:
+          type: string
+          example: "dc_3f9a1c2e7b0d4a5f"
+        deleted:
+          type: boolean
+          enum: [true]
+    DatasetMoveRequest:
+      type: object
+      description: |
+        The body of `PATCH /datasets/{datasetId}`: exactly one field, `collectionId`. A body
+        without it, or with any other field, is `400`.
+      required: [collectionId]
+      additionalProperties: false
+      properties:
+        collectionId:
+          type: ['string', 'null']
+          description: The collection to move the dataset into, or `null` to take it out of its collection and back to the root.
+          example: "dc_3f9a1c2e7b0d4a5f"
     DatasetWithLinks:
       description: A `Dataset` plus a self link. Returned by `GET /datasets/{datasetId}`.
       allOf:
@@ -7858,6 +8332,10 @@ components:
               example: "ticker"
             instrument:
               $ref: '#/components/schemas/Instrument'
+            collectionId:
+              type: string
+              description: The collection the dataset was created in. Present only when the request named one.
+              example: "dc_3f9a1c2e7b0d4a5f"
         - $ref: '#/components/schemas/DatasetUploadSession'
     DatasetVersion:
       type: object
@@ -7981,6 +8459,14 @@ components:
           example: "weth-usdc-week"
         instrument:
           $ref: '#/components/schemas/Instrument'
+        collectionId:
+          type: ['string', 'null']
+          description: |
+            Optional. The collection to create the dataset in; `null`, or leaving it out, creates
+            it at the root. An id that is not one of your collections is `404`, answered before the
+            import is queued and before anything is counted against your plan. The `202` carries
+            `collectionId` only when you sent one.
+          example: "dc_3f9a1c2e7b0d4a5f"
         from:
           type: string
           format: date-time
@@ -8145,6 +8631,10 @@ components:
           type: string
           description: Opaque id of the newly created dataset — same id space as `POST /datasets`.
           example: "ds_3f9a1c2e7b0d4a5f"
+        collectionId:
+          type: string
+          description: The collection the dataset was created in. Present only when the request named one.
+          example: "dc_3f9a1c2e7b0d4a5f"
         importId:
           type: string
           description: |
@@ -9912,6 +10402,7 @@ tags:
         unit discovery, gap detection) and poll its result.
       - List and inspect your datasets, including their current ingested version.
       - Prepare and execute backtests against a dataset exactly like against a managed exchange.
+      - Keep datasets in collections, one-level folders, and move a dataset between them.
       - Delete a dataset you no longer need.
   - name: Live Execution
     description: |-

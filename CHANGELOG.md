@@ -7,6 +7,29 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ## [Unreleased]
 
+## [0.128.68] — 2026-11-23
+
+### Added
+
+- **Collections of datasets**: a collection is a one-level folder for your datasets. `POST /collections`, `GET /collections`,
+  `GET /collections/{collectionId}`, `PATCH /collections/{collectionId}` and `DELETE /collections/{collectionId}` create, list, read,
+  rename (or change the description of) and delete one. A collection reports its `datasetCount`, and `datasetCountByType` when it
+  holds datasets; `description` is absent when it has none. A dataset is in at most one collection, collections may hold datasets of
+  any `type`, and a dataset's `name` stays unique among all your datasets, not per collection. Deleting a collection never deletes
+  data: its datasets are kept and go back to the root. An id that is not one of your collections is `404` everywhere, exactly as one
+  that does not exist. The number of collections an account can keep is limited: past it, `POST /collections` is `429` with
+  `reason: COLLECTIONS_LIMIT`, `retryable: false` and no `Retry-After`; a plan change does not lift it. See "Collections" in the
+  datasets guide.
+- **`collectionId` on a dataset**: `Dataset` carries it when the dataset is in a collection, and leaves it out at the root (never
+  `null`). `POST /datasets` and `POST /datasets/imports` take an optional `collectionId`, answered `404` before anything is created or
+  counted when it is not one of yours; their `201` and `202` carry it only when you sent one.
+- **`PATCH /datasets/{datasetId}`** moves a dataset into a collection, or back to the root with `{"collectionId": null}`. The body is
+  exactly that one field, anything else is `400`. It answers the dataset, as `GET /datasets/{datasetId}` does.
+- **`GET /datasets?collectionId=`** lists the datasets of one collection, or the ones at the root with `collectionId=none`; it combines
+  with `includeDeleted`.
+- The collection routes need the `datasets` scope: `read` for the `GET`s, `write` for `POST`, `PATCH` and `DELETE`, as the table in the
+  authentication guide says.
+
 ## [0.128.67] — 2026-11-23
 
 ### Added
