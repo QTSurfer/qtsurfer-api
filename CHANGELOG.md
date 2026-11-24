@@ -7,6 +7,17 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ## [Unreleased]
 
+## [0.128.69] — 2026-11-24
+
+### Added
+
+- **Conditions in QTScript**: `isEqual`, `isNotEqual`, `isGreatThan`, `isGreatOrEqual`, `isLessThan` and `isLessOrEqual` are written on a
+  `setup:` line like the other indicators, each as `isLessThan("oversold", "rsi14", 30)`: the name it registers, the indicator it reads
+  and the number. A body reads the condition with `isValue("oversold")`, `true` when it holds and `false` when it does not, and `false`
+  until the indicator it reads has a value; `isValue` takes the name of any indicator and is `true` when it has a value that is not 0.
+  `isTrue`, which takes a function, stays Java-only. The QTScript guide lists the six names and their forms and has a section on
+  `isValue`; the Java guide has the same section for `setupIndicators` and `AbstractWindowListener`.
+
 ## [0.128.68] — 2026-11-23
 
 ### Added
