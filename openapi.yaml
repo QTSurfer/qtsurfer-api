@@ -4641,7 +4641,7 @@ paths:
         you sell are its **offers** (`POST /signals/channels/{channelId}/offers`): a delay, how many runs one
         subscription feeds, how long it lasts. Each sale is a single-use **code**; whoever redeems it gets a
         subscription that feeds their live runs, and each notice you publish reaches those runs, at the offer's delay,
-        as an attachment of the instrument. See the **[Signal channels](docs/signals.md)** guide.
+        as an attachment of the instrument. See the **[Signal channels](https://github.com/QTSurfer/qtsurfer-api/blob/main/docs/signals.md)** guide.
 
         A new channel is `unlisted`: it is found only by its `channelId`. `public` also lists it in
         `GET /signals/channels/public`, with its offers.
@@ -10418,10 +10418,10 @@ tags:
       These endpoints cover the run's lifecycle (start, inspect, stop, change visibility) and its
       runtime parameters. Consuming the run's own signal stream and updating parameters over a live
       connection instead of polling is a WebSocket protocol built on top of these same endpoints —
-      see **[Live execution](docs/live.md)** for the full flow: minting a connection token
+      see **[Live execution](https://github.com/QTSurfer/qtsurfer-api/blob/main/docs/live.md)** for the full flow: minting a connection token
       (`POST /live/token`), the signal channel, and the `live.params` RPC. A run can also be
       paper-traded — its signals executed in simulation, with equity and KPIs — see
-      **[Paper trading](docs/live_paper.md)**.
+      **[Paper trading](https://github.com/QTSurfer/qtsurfer-api/blob/main/docs/live_paper.md)**.
 
       **Key functionalities**:
       - Start, inspect, and stop a live run for one of your strategies.
@@ -10435,7 +10435,7 @@ tags:
       move — publish **notices** about an instrument of a centralized exchange or a pool, and sell access to them as
       **offers** (a delay, a number of runs, a duration), one single-use **code** per sale. Whoever redeems a code gets a
       **subscription** that feeds their live runs: each notice reaches them, at the offer's delay, as an attachment of
-      the instrument. See **[Signal channels](docs/signals.md)** for the full flow.
+      the instrument. See **[Signal channels](https://github.com/QTSurfer/qtsurfer-api/blob/main/docs/signals.md)** for the full flow.
 
       **Key functionalities**:
       - Create a channel, unlisted or public, and the offers it sells; mint and revoke codes.
