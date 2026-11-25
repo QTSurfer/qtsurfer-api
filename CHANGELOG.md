@@ -7,6 +7,17 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ## [Unreleased]
 
+## [0.128.70] — 2026-11-25
+
+### Changed
+
+- Name the per-market import usage and newly minted signal code schemas so generated clients use
+  stable type names. Their JSON shapes are unchanged.
+- Version the live WebSocket contract as AsyncAPI `0.4.0`. The shared parameter update reply can omit
+  `effectiveAtMs` while the run is waiting for a source. DEX signals can carry `instrument.id`, and
+  system signals are available through REST history when requested. Sandbox replay retains a limited
+  history without a fixed count or duration guarantee in the contract.
+
 ## [0.128.69] — 2026-11-24
 
 ### Added

@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: QTSurfer API
   summary: QTSurfer backend services API
-  version: 0.128.69
+  version: 0.128.70
   contact:
     name: QTSurfer Support
     email: support@qtsurfer.com
@@ -6318,20 +6318,22 @@ components:
           type: array
           description: "The instruments of an exchange's history you have imported this month, counted per market against `GET /account`'s `maxCexImportInstrumentsPerMonth`. A market with none is not listed."
           items:
-            type: object
-            required: [exchange, segment, used]
-            properties:
-              exchange:
-                type: string
-                example: binance
-              segment:
-                type: string
-                example: spot
-              used:
-                type: integer
-                example: 3
+            $ref: '#/components/schemas/CexImportInstrumentUsage'
         _links:
           $ref: '#/components/schemas/AccountUsageLinks'
+    CexImportInstrumentUsage:
+      type: object
+      required: [exchange, segment, used]
+      properties:
+        exchange:
+          type: string
+          example: binance
+        segment:
+          type: string
+          example: spot
+        used:
+          type: integer
+          example: 3
     AccountUsageLinks:
       description: HAL `_links` for `GET /account/usage`
       type: object
@@ -10136,17 +10138,19 @@ components:
         codes:
           type: array
           items:
-            type: object
-            required: [codeId, code, prefix]
-            properties:
-              codeId:
-                type: string
-              code:
-                type: string
-                description: The code to hand to the buyer. Keep it secret until then.
-              prefix:
-                type: string
-                description: Its first characters, as `GET /signals/offers/{offerId}/codes` shows it.
+            $ref: '#/components/schemas/MintedSignalCode'
+    MintedSignalCode:
+      type: object
+      required: [codeId, code, prefix]
+      properties:
+        codeId:
+          type: string
+        code:
+          type: string
+          description: The code to hand to the buyer. Keep it secret until then.
+        prefix:
+          type: string
+          description: Its first characters, as `GET /signals/offers/{offerId}/codes` shows it.
     SignalCode:
       type: object
       required: [codeId, prefix, state, createdAtMs]

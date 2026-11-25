@@ -1,7 +1,7 @@
 asyncapi: 3.1.0
 info:
   title: QTSurfer Live Execution WebSocket
-  version: 0.3.0
+  version: 0.4.0
   description: |
     The WebSocket side of Live Execution: receive a live run's signals as they happen, and change its
     parameters over the same connection. The REST side (starting, reading and stopping runs, minting
