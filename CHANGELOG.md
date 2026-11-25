@@ -7,6 +7,17 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ## [Unreleased]
 
+## [0.128.71] — 2026-11-25
+
+### Changed
+
+- **A strategy that detaches its source ends its backtest or sweep run there.** `detach(...)` (QTScript `detach();`, Java `detach(instrument)`,
+  `detach(context)` or a listener's `detach()`) was ignored in a backtest; now the run stops reading at that point and ends `Completed` with the
+  results of what it read, and `onDetach` is told `STRATEGY`. A backtest reads one instrument, so detaching it ends the run. `state.completed` is the
+  number of data points the strategy was given and can be below `state.size`; in a grid sweep it adds up the trials'. A strategy that never detaches is
+  unchanged. Live runs already honoured it. The QTScript, Java, backtest, sweep and live guides say so, and that `detach` closes and cancels
+  nothing: a strategy that takes its profit sells first and detaches after.
+
 ## [0.128.70] — 2026-11-25
 
 ### Changed

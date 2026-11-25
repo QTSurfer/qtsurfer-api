@@ -464,6 +464,10 @@ strategies](strategy_coding.md#a-strategy-that-leaves-a-source)).
   reads the instrument.
 - **From `onDetach` it does nothing.** A strategy may call `detach` there, for instance from closing code it shares with the
   other hooks, and the platform ignores the request: the source is already going.
+- **It closes nothing and cancels nothing.** A position the strategy holds is its own to close: it signals the sell, then detaches, in that
+  order, as in [A strategy that leaves a source](qtscript.md#a-strategy-that-leaves-a-source).
+- **A backtest stops there too.** In a [backtest](backtest_execute.md#a-strategy-can-end-its-backtest-early) or a sweep run the strategy stops
+  reading where it asks, and the job ends `Completed`; a backtest reads one instrument, so detaching it ends the run.
 - **It ends like any detach.** The attachment becomes `DETACHED` with the `reason` `STRATEGY`, the strategy's `onDetach` is told
   `STRATEGY`, and when it was the last source the run waits again, so that the next attach, a new notice for instance, starts it.
 - **It is a signal of the type `system`**, `kind` `DETACH`, with the attachment in its `data`. It is in the run's history,

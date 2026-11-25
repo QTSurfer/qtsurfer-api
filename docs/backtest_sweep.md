@@ -245,6 +245,12 @@ curl "https://api.qtsurfer.net/v1/backtest/binance/ticker/executeSweep/$PREPARE_
 
 Errors: `404` sweep not found or expired.
 
+### A strategy that detaches
+
+A trial whose strategy asks to leave its source with `detach` stops reading there, as a [backtest](backtest_execute.md#a-strategy-can-end-its-backtest-early)
+does: its row counts the trades of what it read and ranks like any other. In a grid sweep, `state.completed` adds up the data points the
+trials were given, so it can be below `state.size` while the sweep is `COMPLETED`; `progress` counts trials and is complete either way.
+
 ## Walk-forward validation
 
 Add `walkForward` to `executeSweep`'s body to test whether the winning parameters keep working,

@@ -568,8 +568,17 @@ public void update(Kline kline) {
 
 `detach(Instrument)` ends the source that reads the instrument; `detach(StrategyContext)`, called from `onAttach` or `onDetach`, ends
 the attachment the context describes, by its id; in a window listener, `detach()` ends the source of the window's instrument. The
-request is applied before the next event and `onDetach` is told `REASON_STRATEGY`; a backtest ignores it. Called from
+request is applied before the next event and `onDetach` is told `REASON_STRATEGY`. A backtest, or a sweep run, stops reading there too and
+ends `Completed` with the results of what it read ([Backtests](backtest_execute.md#a-strategy-can-end-its-backtest-early)). Called from
 `onDetach`, `detach` is allowed and does nothing: the source is already going.
+
+`detach` closes nothing and cancels nothing: the strategy closes its position, and deals with its orders, before it leaves. Sell first, detach after:
+
+```java
+Instrument instrument = kline.getInstrument();
+emitSignal(new SellSignal(this, instrument, price)); // close what the strategy holds first
+detach(instrument);                                  // then leave the source
+```
 
 A QTScript strategy does the same with `onAttach { }` and `onDetach { }` - see
 [QTScript](qtscript.md#attaching-and-detaching-a-source).

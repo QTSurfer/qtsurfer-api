@@ -204,6 +204,14 @@ logic spans several instruments, reading the others' indicators or a triangular 
 on each pair, cannot be backtested the way it runs live. A live run is different: its source takes
 several instruments.
 
+### A strategy can end its backtest early
+
+A strategy that asks to leave its source with `detach` ([QTScript](qtscript.md#a-strategy-that-leaves-a-source), [Java](strategy_coding.md#attaching-and-detaching-a-source))
+stops the backtest there: the data after that point is not read, `onDetach` is told `STRATEGY`, and the job ends `Completed` with the results of
+what the strategy read. Its `state.completed` is the number of data points the strategy was given, below `state.size`: a run that ends this way is
+not partial and not failed. A backtest reads one instrument, so detaching it ends the run. A strategy that never detaches reads the whole range,
+as before. A strategy for a pump and its dump can take its profit, detach, and cost a backtest only what it read.
+
 Optionally takes `params`: strategy properties for this one run, applied without recompiling.
 Use this to re-run a sweep row as an ordinary backtest result with a chosen parameter vector — for
 example, when you need the plain-backtest result alongside a sweep curve (see
