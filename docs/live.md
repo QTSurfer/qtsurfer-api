@@ -473,7 +473,6 @@ strategies](strategy_coding.md#a-strategy-that-leaves-a-source)).
 - **It is a signal of the type `system`**, `kind` `DETACH`, with the attachment in its `data`. It is in the run's history,
   `GET /live/{runId}/signals?type=system`: without `type` the history does not carry it, so a client that does not know the type never
   sees it. It is never pushed on the channel.
-- **A backtest ignores it:** a backtest reads the data it was given.
 
 ### What can refuse an attach
 

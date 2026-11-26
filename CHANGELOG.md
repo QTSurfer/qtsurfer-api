@@ -7,6 +7,15 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ## [Unreleased]
 
+## [0.128.72] — 2026-11-26
+
+### Fixed
+
+- **The backtest guide and the live guide, after the entry of 0.128.71 on a strategy that detaches.** In the backtest guide the new section "A strategy can
+  end its backtest early" had been inserted in front of the paragraphs on `params` and `baseConfig`, which therefore sat under its heading; it now follows them,
+  just before "Request body". In the live guide, the old bullet "A backtest ignores it" is removed: it contradicted the bullet that says a backtest stops
+  there. No route, schema or behaviour changes.
+
 ## [0.128.71] — 2026-11-25
 
 ### Changed
