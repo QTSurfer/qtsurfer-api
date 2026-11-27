@@ -206,6 +206,13 @@ A code is used once. Sending the same code again yourself answers the subscripti
 request is safe; a code someone else redeemed is `409` with `reason: CODE_USED`. A code that does not exist, was
 revoked, or whose channel was deleted is `404`.
 
+You hold one subscription to a channel at a time. A code of a channel you already subscribe to is `409` with
+`reason: ALREADY_SUBSCRIBED`, and the code is **not used**: it stays valid, so renew the subscription you hold with a
+code of its own offer (see below), or cancel it first to subscribe with another offer. An `EXPIRED` subscription still
+holds the channel, because renewing it is what it is for (it does not count against your plan's limit, which is a
+different count); one you cancelled, or that was revoked, does not hold it, so you can subscribe to the channel again.
+This is checked before your plan's limit.
+
 ```json
 POST /signals/subscriptions/{subscriptionId}/runs
 { "runId": "5t5oAmQ4PD0lQRoCU58uE0", "type": "ticker" }
@@ -219,17 +226,18 @@ POST /signals/subscriptions/{subscriptionId}/runs
 | `resolveInstrument` | Optional, `true` by default. For a pool: whether the strategy is told of it when the pool delivers its first candle (`true`) or at once, with a stand-in instrument (`false`), as for [an attachment](live.md#the-instrument-of-a-pool). |
 
 A subscription feeds at most its `maxRuns` runs at once (`429` with `reason: SUBSCRIPTION_RUNS_LIMIT` past it), and a
-run is fed by one subscription of a channel at a time (`409` with `reason: RUN_FED_BY_ANOTHER`). `DELETE
+run is fed by one subscription of a channel at a time (`409` with `reason: RUN_FED_BY_ANOTHER`, which only a second
+subscription to the same channel, made before you were held to one, can cause). `DELETE
 /signals/subscriptions/{subscriptionId}/runs/{runId}` stops feeding a run; `DELETE
 /signals/subscriptions/{subscriptionId}` cancels the subscription. What was already attached stays attached.
 
-A subscription past its `expiresAtMs` is `EXPIRED`: it feeds nothing and does not count against your plan, and its
-runs can be fed by another subscription of the channel. `POST /signals/subscriptions/{subscriptionId}/renew` with
+A subscription past its `expiresAtMs` is `EXPIRED`: it feeds nothing and does not count against your plan's limit, but
+it is still your subscription to its channel until you cancel it. `POST /signals/subscriptions/{subscriptionId}/renew` with
 another code of **the same offer** moves its expiry by the offer's duration, from its current expiry or, if it has
 already expired, from now; an expired subscription resumes with the runs it fed, and counts against your plan again
 (`429` with `reason: PLAN_LIMIT` if you are at its limit). A code of another offer is `409`
-with `reason: OTHER_OFFER`; a revoked or cancelled subscription cannot be renewed (`SUBSCRIPTION_INACTIVE`), nor one
-whose offer does not expire (`DOES_NOT_EXPIRE`).
+with `reason: OTHER_OFFER`: to move to that offer, cancel the subscription and redeem the code; a revoked or cancelled
+subscription cannot be renewed (`SUBSCRIPTION_INACTIVE`), nor one whose offer does not expire (`DOES_NOT_EXPIRE`).
 
 ## Reading deliveries
 
@@ -282,7 +290,7 @@ fits. How many runs a subscription feeds is the offer's, not the plan's.
 | `400` | A field outside its rules; a notice's `source` that is not one instrument or pool of a market that can be followed live; a run's `type` that its strategy does not consume; a `purchaseUrl` that is not `https`. |
 | `402` | Your plan does not include it (see [Limits by plan](#limits-by-plan)). |
 | `404` | No such channel, offer, code, run or subscription of yours (or the channel was deleted), or a webhook address that is not current. |
-| `409` | `CODE_USED`, `OTHER_OFFER`, `SUBSCRIPTION_INACTIVE`, `DOES_NOT_EXPIRE`, `RUN_FED_BY_ANOTHER`; a channel with 10 offers (`OFFER_LIMIT`) or an offer with 10 000 codes (`CODE_LIMIT`). |
+| `409` | `CODE_USED`, `ALREADY_SUBSCRIBED`, `OTHER_OFFER`, `SUBSCRIPTION_INACTIVE`, `DOES_NOT_EXPIRE`, `RUN_FED_BY_ANOTHER`; a channel with 10 offers (`OFFER_LIMIT`) or an offer with 10 000 codes (`CODE_LIMIT`). |
 | `429` | `PLAN_LIMIT`, `SUBSCRIPTION_RUNS_LIMIT` or `NOTICE_RATE_LIMIT`, as above. |
 
 ## Related guides

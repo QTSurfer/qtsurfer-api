@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: QTSurfer API
   summary: QTSurfer backend services API
-  version: 0.128.72
+  version: 0.128.73
   contact:
     name: QTSurfer Support
     email: support@qtsurfer.com
@@ -5265,6 +5265,13 @@ paths:
 
         A code is used once. Sending the same code again yourself answers the subscription it gave you (`200`), so a
         retried request is safe; a code someone else redeemed is `409` with `reason: CODE_USED`.
+
+        You hold one subscription to a channel at a time. A code of a channel you already subscribe to is `409` with
+        `reason: ALREADY_SUBSCRIBED`, and the code is **not used**: renew that subscription with a code of its own offer
+        (`POST /signals/subscriptions/{subscriptionId}/renew`), or cancel it first to subscribe with another offer. An
+        expired subscription still holds the channel, because renewing it is what it is for (it does not count against
+        your plan's limit, which is a different count); one you cancelled, or that was revoked, does not hold it. It is
+        checked before your plan's limit.
       requestBody:
         required: true
         content:
@@ -5319,7 +5326,8 @@ paths:
                 $ref: '#/components/schemas/ResponseError'
         '409':
           description: >-
-            Someone else already redeemed this code (`reason: CODE_USED`).
+            Someone else already redeemed this code (`reason: CODE_USED`), or you already subscribe to the channel of
+            this code (`reason: ALREADY_SUBSCRIBED`; the code is not used).
           content:
             application/json:
               schema:
@@ -5418,7 +5426,8 @@ paths:
         Renews the subscription with another code of **the same offer**: its expiry moves by the offer's duration, from
         its current expiry or, if it has already expired, from now. An expired subscription resumes with the runs it
         fed, and counts against your plan again. The same code sent again to the same subscription answers it
-        unchanged.
+        unchanged. A code of another offer of the channel cannot renew it (`reason: OTHER_OFFER`); to move to that
+        offer, cancel the subscription and redeem the code.
       parameters:
         - name: subscriptionId
           in: path

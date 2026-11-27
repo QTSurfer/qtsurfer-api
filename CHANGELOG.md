@@ -7,6 +7,17 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ## [Unreleased]
 
+## [0.128.73] — 2026-11-27
+
+### Added
+
+- **A buyer holds one subscription to a channel at a time: `ALREADY_SUBSCRIBED`.** `POST /signals/subscriptions` answers `409` with `reason: ALREADY_SUBSCRIBED` when
+  you already subscribe to the channel of the code and that subscription is not over: an `ACTIVE` one, or an `EXPIRED` one, which is what `renew` is for. The
+  code is **not used**, so it stays valid. A subscription you cancelled, or that was revoked, does not count, so you can subscribe to the channel again. It is
+  checked after `CODE_USED` and before the plan's limit, and the same code sent again by the same user still answers the subscription it gave (`200`). Subscriptions
+  to one channel that were made before this rule are left as they are. `renew` with a code of another offer of the channel is still `OTHER_OFFER`; to move to that
+  offer, cancel the subscription and redeem the code. The Signal channels guide says so.
+
 ## [0.128.72] — 2026-11-26
 
 ### Fixed
