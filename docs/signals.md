@@ -159,13 +159,32 @@ POST /signals/channels/{channelId}/notices
 | Field | Meaning |
 |---|---|
 | `source` | Required. The instrument: a source as a start takes it (see [Sources](live.md#sources)), without `type` and with the instruments named one by one. For a `cex` source, 1 to 10 pairs, with no `*`. For a `dex` source, exactly one pool. |
-| `ref` | Optional, up to 64 characters. The same `ref` to the same channel answers the notice it already made, so a retried request or a repeated alert is safe. A repeat does not count against the channel's rate. |
+| `ref` | Optional, up to 64 characters. It names the alert, not the instrument: the instrument is already in `source`. The same `ref` to the same channel answers the notice it made while that notice has not expired (before its `expiresAtMs`), so a retried request or a repeated alert is safe, and that repeat does not count against the channel's rate. Once the notice has expired, the same `ref` makes a new notice, which counts against the rate like any other: an alert about the same instrument a while later is delivered. |
 | `expiresIn` | Optional, `1` to `3600` seconds, `300` by default. A delivery not made by then is `EXPIRED`. A subscription whose delay is longer than this never receives the notice. |
 | `data` | Optional. Text for buyers to read with the notice: up to 16 entries. Keys are lower case (letters, digits, `_`, parts separated by `.`), up to 64 characters. Values are 1 to 256 characters with no control characters. It does not reach the strategy. |
 
 `deliveries` is how many runs the notice goes to: those fed, when it is published, by a subscription that is active
 and not expired. What each delivery did is the buyer's to read; `GET /signals/channels/{channelId}/notices` shows you
 the counts by status.
+
+### What `source` names, by market
+
+`source` is the instrument the notice is about, and `instruments` is how it is named. Every field is read exactly as the
+[sources of a run](live.md#sources) are, and a source that no run could read is `400`.
+
+| Market | `venueType`, `exchange`, `segment` | `instruments` |
+|---|---|---|
+| A centralized exchange | `cex`, an exchange and one of its segments, such as `binance` and `spot` | 1 to 10 pairs written `BASE/QUOTE`, with no `*`: `["SOL/USDT"]` |
+| A pool on an EVM chain | `dex`, the chain and the protocol of the pool, such as `robinhood` and `uniswap-v3` | Exactly one entry: the address of the pool, `["0x3f4e0b2c8e1a4b6d9c0f1a2b3c4d5e6f708192a3"]` |
+| A token on `solana` | `dex`, `solana` and `pumpfun` | Exactly one entry: the mint of the token, in base58, **case-sensitive**, written exactly as the token has it: `["2TngN4B7XaoGSKsYvttq5bFAdM4Z4xCSnuyRwGiFpump"]` |
+
+On `solana` the notice names the **token**, not a pool: the mint is the one identifier, and the run reads the token from its
+bonding curve to the pool that pump.fun creates for it, as one series (see [Solana: a token by its
+mint](live.md#solana-a-token-by-its-mint)). So a provider does not choose a pool, and does not send one: any other field, in the body
+or in `source`, is `400`. Two tokens can share a name or a symbol; only the mint tells them apart, which is why it is the
+instrument and the `ref` is not.
+
+What else a buyer should read with the alert, such as the token's name, goes in `data`.
 
 ### Through the webhook address
 

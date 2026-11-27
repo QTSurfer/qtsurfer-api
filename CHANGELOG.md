@@ -7,6 +7,23 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ## [Unreleased]
 
+## [0.128.74] — 2026-11-27
+
+### Changed
+
+- **A notice's `ref` answers the notice it made only while that notice has not expired.** Until now the same `ref` sent to the
+  same channel answered the first notice for good, so a provider that used the instrument as its `ref` could never alert about the
+  same instrument twice: the second alert was answered as the first and delivered to nobody. Now the same `ref` answers the notice
+  it made until that notice's `expiresAtMs` (the one the `202` returned); after that it makes a new notice, which counts against the
+  rate of the channel like any other. A request retried within the notice's life is as safe as before. `POST /signals/channels/{channelId}/notices`
+  and `POST /signals/hook/{hookKey}`, and the `ref` of `SignalNoticeRequest`, say so.
+
+### Documentation
+
+- **What a notice's `source` names, by market**, in the signal channels guide: a pair of a centralized exchange, the address of a pool of
+  an EVM chain, and, on `solana`, the mint of the token, case-sensitive, which names the token and not a pool. The `ref` is the alert's,
+  never the instrument's: the instrument is in `source`.
+
 ## [0.128.73] — 2026-11-27
 
 ### Added

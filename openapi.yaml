@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: QTSurfer API
   summary: QTSurfer backend services API
-  version: 0.128.73
+  version: 0.128.74
   contact:
     name: QTSurfer Support
     email: support@qtsurfer.com
@@ -4895,9 +4895,13 @@ paths:
         "Attaching and detaching a source" in the Live execution guide). Owner only.
 
         `source` names the instrument: a pair of a centralized exchange, or one pool. How the run reads it (`ticker` or
-        `kline`, and its warm-up) is said for each run that a subscription feeds. `ref` is a string of yours, up to 64 characters:
-        sending the same `ref` to the same channel answers the notice it already made instead of making another one, so
-        a retried request or a repeated alert is safe, and it does not count against the rate of the channel.
+        `kline`, and its warm-up) is said for each run that a subscription feeds. For a pool of a `solana` token, `instruments`
+        holds the token's mint, not the address of a pool. `ref` is a string of yours, up to 64 characters, that names the alert,
+        not the instrument (the instrument is `source`'s): sending the same `ref` to the same channel while the notice it made
+        is still worth acting on, before its `expiresAtMs`, answers that notice instead of making another one, so a retried
+        request or a repeated alert is safe, and it does not count against the rate of the channel. Once that notice has
+        expired the same `ref` makes a new notice, which counts against the rate like any other: an alert about the same
+        instrument a while later is not swallowed.
         `expiresIn` is how long the notice is worth acting on: a delivery not made by then is `EXPIRED`.
 
         The `202` is the acceptance: `deliveries` is how many runs it goes to. What each delivery did is read
@@ -4927,7 +4931,7 @@ paths:
                 confidence: high
       responses:
         '202':
-          description: Accepted. If the same `ref` was sent before to this channel, the notice it made, unchanged.
+          description: Accepted. If the same `ref` was sent before to this channel and the notice it made has not expired, that notice, unchanged.
           content:
             application/json:
               schema:
@@ -9983,7 +9987,10 @@ components:
           type: string
           minLength: 1
           maxLength: 64
-          description: A string of yours. Sending the same `ref` to the same channel answers the notice it already made.
+          description: >-
+            A string of yours that names the alert, not the instrument (`source` says which). Sending the same `ref` to the
+            same channel while the notice it made has not expired answers that notice; once it has expired, the same `ref`
+            makes a new notice.
         expiresIn:
           type: integer
           minimum: 1
