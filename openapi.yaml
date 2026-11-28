@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: QTSurfer API
   summary: QTSurfer backend services API
-  version: 0.128.74
+  version: 0.128.75
   contact:
     name: QTSurfer Support
     email: support@qtsurfer.com
@@ -2579,17 +2579,20 @@ paths:
                 $ref: '#/components/schemas/ResponseError'
         '429':
           description: |
-            You already have as many collections as an account can keep: `reason: COLLECTIONS_LIMIT`.
-            Delete a collection to make room. It is a limit of the platform, not of a plan, so
-            changing plan does not lift it. `retryable` is `false` and there is no `Retry-After`.
+            You already keep as many collections as you may. `reason: PLAN_LIMIT` when it is your plan's
+            limit (the Datasets guide, "Collections by plan", has the values; `GET /account` says
+            yours as `maxCollections`); `reason: COLLECTIONS_LIMIT` when it is the limit of the
+            platform, which is above every plan. Delete a collection to make room. `retryable` is
+            `false` and there is no `Retry-After`. An account that already has more than its plan
+            allows keeps all of them and cannot create another.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ResponseError'
               example:
                 code: 429
-                message: 'Collection limit reached. Delete a collection first.'
-                reason: COLLECTIONS_LIMIT
+                message: 'You already keep as many collections as your plan allows. Delete a collection first.'
+                reason: PLAN_LIMIT
                 retryable: false
       security:
         - bearerAuth: []
@@ -6242,6 +6245,10 @@ components:
           type: integer
           description: Maximum number of active datasets your tier allows.
           example: 3
+        maxCollections:
+          type: integer
+          description: "Maximum number of dataset collections your plan lets you keep. A new one past it is refused with `429` and `reason: PLAN_LIMIT`. The largest whole number means no limit of the plan; the platform's own limit still applies. The Datasets guide, \"Collections by plan\", lists them."
+          example: 2
         maxDatasetBytes:
           type: integer
           format: int64

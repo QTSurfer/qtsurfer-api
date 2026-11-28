@@ -7,6 +7,16 @@ pre-1.0, its version follows the version in `openapi.yaml`.
 
 ## [Unreleased]
 
+## [0.128.75] — 2026-11-28
+
+### Changed
+
+- **How many collections an account can keep is a limit of its plan.** Until now it was one limit of the platform, the same for every
+  account. `GET /account` now carries `maxCollections`, the values are in the Datasets guide (a new section, "Collections by plan"), and
+  `POST /collections` past it is `429` with `reason: PLAN_LIMIT`, `retryable: false`. The platform's own limit stays above every plan and
+  keeps `reason: COLLECTIONS_LIMIT`. An account that already has more collections than its plan allows keeps all of them and cannot
+  create another until it is under the limit; nothing is deleted. Renaming, moving datasets and deleting a collection are not affected.
+
 ## [0.128.74] — 2026-11-27
 
 ### Changed

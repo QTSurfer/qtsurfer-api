@@ -32,6 +32,7 @@ curl https://api.qtsurfer.net/v1/account \
   "maxCexImportRangeHours": 24,
   "maxConcurrentImports": 1,
   "maxDatasets": 3,
+  "maxCollections": 2,
   "maxDatasetBytes": 52428800,
   "maxTotalStorageBytes": 104857600,
   "_links": {
@@ -54,6 +55,7 @@ curl https://api.qtsurfer.net/v1/account \
 | `maxCexImportRangeHours` | maximum length, in hours, of the time range of one dataset import of a centralized exchange's history (`type: cex`), counted apart from `maxImportRangeHours`. See [Importing an exchange's history](datasets.md#importing-an-exchanges-history) |
 | `maxConcurrentImports` | maximum number of [dataset imports](datasets.md#importing-a-dataset-instead-of-uploading-one) your account may have in flight at once, queued or running, whether of an exchange's history or of a pool. A new import over it is refused with `429` until one has finished |
 | `maxDatasets` | maximum number of active [datasets](datasets.md) your tier allows |
+| `maxCollections` | maximum number of [dataset collections](datasets.md#collections) your plan lets you keep. A new one past it is refused with `429`, `reason: PLAN_LIMIT`. See [Collections by plan](datasets.md#collections-by-plan) |
 | `maxDatasetBytes` | maximum size, in bytes, of a single dataset version **as stored** (the `bytes` of its ready version: for a CSV upload, the converted file, not the file you upload). See [Size limits](datasets.md#size-limits) |
 | `maxTotalStorageBytes` | maximum combined storage, in bytes, across every dataset, strategy-execution signal, and registered strategy on your account — see below |
 

@@ -680,14 +680,31 @@ changes nothing. A deleted dataset keeps its place in its collection, and a list
 | `404` | the collection does not exist **or is not yours**: the two are answered the same, and the message names the collection (`Collection not found: dc_...`), so that ids of other accounts are never confirmed. On `POST /datasets` and `POST /datasets/imports` it is answered before anything is created or counted against your plan. A dataset that does not exist (or is deleted) is the usual dataset `404` |
 | `409` | you already have a collection with that `name` (on creation or on rename) |
 | `413` | the request body is too large |
-| `429` | you have reached the number of collections an account can keep: `reason: COLLECTIONS_LIMIT`, `retryable: false`, no `Retry-After`. Delete a collection to make room. It is a limit of the platform and not of a plan, so an upgrade link is not offered |
+| `429` | you already keep as many collections as you may. `reason: PLAN_LIMIT` when it is your plan's limit ([Collections by plan](#collections-by-plan)); `reason: COLLECTIONS_LIMIT` when it is the limit of the platform, which is above every plan. Neither is retryable: `retryable: false`, no `Retry-After`. Delete a collection to make room |
 
 ```json
+{"code": 429, "message": "You already keep as many collections as your plan allows. Delete a collection first.", "reason": "PLAN_LIMIT", "retryable": false}
 {"code": 429, "message": "Collection limit reached. Delete a collection first.", "reason": "COLLECTIONS_LIMIT", "retryable": false}
 ```
 
 The collection routes need the `datasets` scope: `read` for the `GET`s and `write` for `POST`,
 `PATCH` and `DELETE` (see [Authentication and scopes](auth.md)).
+
+### Collections by plan
+
+How many collections you can keep depends on your plan. This table is the one place that lists
+them.
+
+| Plan | Collections you keep |
+|---|---|
+| free | 2 |
+| basic | 10 |
+| pro | 20 |
+| elite | 100 |
+
+`GET /account` says yours, as `maxCollections`. Past it, creating a collection is refused with `429`
+and `reason: PLAN_LIMIT`. An account that already has more than its plan allows keeps every one of
+them and cannot create another until it is under the limit; nothing is deleted when a plan changes.
 
 ## Getting a dataset
 
